@@ -59,8 +59,7 @@ pub fn spawn(app: AppHandle, window: WebviewWindow) {
 fn checked(app: &AppHandle, path: &str) -> Result<PathBuf, String> {
     let dir = folder(app).ok_or("no Pictures folder")?;
     let path = PathBuf::from(path);
-    let parent = path.parent().and_then(|p| p.canonicalize().ok());
-    if parent != dir.canonicalize().ok() || !path.is_file() {
+    if !crate::platform::directly_in(&path, &dir) || !path.is_file() {
         return Err("not a screenshot".into());
     }
     Ok(path)
@@ -87,7 +86,7 @@ pub async fn screenshot_copy(app: AppHandle, path: String) -> Result<(), String>
 #[tauri::command]
 pub fn screenshot_open(app: AppHandle, path: String) -> Result<(), String> {
     let path = checked(&app, &path)?;
-    std::process::Command::new("explorer.exe").arg(path).spawn().map(|_| ()).map_err(|e| e.to_string())
+    crate::platform::explorer(path)
 }
 
 #[cfg(test)]

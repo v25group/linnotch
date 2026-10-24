@@ -32,33 +32,41 @@ function size(bytes: number) {
   return `${bytes.toFixed(i === 0 || bytes >= 100 ? 0 : 1)} ${units[i]}`;
 }
 
+const GREEN = "#4fd18b";
+
+/** The pop-up: centred, the arrow drops in beside the title. */
 export function DownloadFlash({ download }: { download: Download }) {
   return (
-    <div className="flex h-15 items-center gap-3 px-3.5">
-      <motion.span className="grid size-9 shrink-0 place-items-center text-[#4fd18b]"
-        initial={{ y: -14, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 400, damping: 18 }}>
-        <Icon name="download" size={26} />
-      </motion.span>
-      <div className="min-w-0 flex-1">
-        <div className="text-[14px] font-semibold">Download finished</div>
-        <div className="truncate text-[12px] text-white/55">{download.name} · {size(download.size)}</div>
+    <div className="flex h-15 flex-col items-center justify-center gap-0.5 px-5 text-center">
+      <div className="flex items-center gap-1.5 text-[13.5px] font-semibold">
+        <motion.span className="grid place-items-center" style={{ color: GREEN }}
+          initial={{ y: -12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 400, damping: 18 }}>
+          <Icon name="download" size={16} />
+        </motion.span>
+        Download finished
       </div>
+      <div className="max-w-full truncate text-[11.5px] text-white/55">{download.name} · {size(download.size)}</div>
     </div>
   );
 }
 
+/** Hovering the pop-up: the file front and centre with a check on it, then its actions. */
 export function DownloadCard({ download, onDone }: { download: Download; onDone: () => void }) {
   return (
-    <div className="flex flex-col gap-3 p-3.5">
-      <div className="flex items-center gap-3">
-        <span className="text-white/80"><Icon name={iconFor(download.name)} size={30} /></span>
-        <div className="min-w-0 flex-1">
-          <div className="text-[11px] text-[#4fd18b]">Download finished</div>
-          <div className="truncate text-[14px] font-semibold">{download.name}</div>
-          <div className="text-[11.5px] text-white/45">{size(download.size)} · Downloads</div>
-        </div>
+    <div className="flex flex-col items-center gap-3 p-4 text-center">
+      <motion.div className="relative" initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 420, damping: 24 }}>
+        <span className="grid size-13 place-items-center rounded-2xl bg-white/8 text-white/85" style={{ boxShadow: "inset 0 0 0 1px rgb(255 255 255 / 0.08)" }}>
+          <Icon name={iconFor(download.name)} size={26} />
+        </span>
+        <span className="absolute -right-1.5 -bottom-1.5 grid size-5 place-items-center rounded-full text-black ring-2 ring-black" style={{ background: GREEN }}>
+          <Icon name="check" size={12} />
+        </span>
+      </motion.div>
+      <div className="w-full min-w-0">
+        <div className="truncate px-2 text-[14px] font-semibold">{download.name}</div>
+        <div className="mt-0.5 text-[11.5px] text-white/45">{size(download.size)} · Saved to Downloads</div>
       </div>
-      <div className="flex gap-2">
+      <div className="flex w-full gap-2">
         <button onClick={() => { invoke("open_download", { path: download.path }).catch(() => {}); onDone(); }}
           className="flex h-8 flex-1 items-center justify-center rounded-full bg-white text-[12.5px] font-semibold text-black hover:brightness-90">
           Open

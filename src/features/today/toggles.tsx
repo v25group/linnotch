@@ -47,7 +47,7 @@ function Toggle({ icon, label, on, color, available = true, onClick }: {
 }) {
   return (
     <button onClick={onClick} disabled={!available} aria-pressed={on} aria-label={label}
-      className="group flex w-[76px] shrink-0 flex-col items-center gap-1.5 disabled:opacity-35">
+      className="group flex snap-start flex-col items-center gap-1.5 disabled:opacity-35">
       <motion.span className="grid size-11 place-items-center rounded-full transition-colors duration-200"
         style={{ background: on ? color : "rgb(255 255 255 / 0.09)", color: on ? "#fff" : "rgb(255 255 255 / 0.8)", boxShadow: on ? `0 0 18px color-mix(in srgb, ${color} 45%, transparent)` : undefined }}
         whileHover={available ? { scale: 1.06 } : undefined} whileTap={available ? { scale: 0.9 } : undefined}>
@@ -68,8 +68,10 @@ export function TodayView({ weather, dnd, onDnd, devOn, onDev }: {
     <div className="flex flex-col gap-3">
       <WeatherPanel weather={weather} />
       <div className="h-px bg-white/10" />
-      {/* More buttons than fit: the row scrolls sideways (wheel too). */}
-      <div ref={row} className="no-scrollbar -mx-1 flex overflow-x-auto px-1" onWheel={(e) => row.current && (row.current.scrollLeft += e.deltaY + e.deltaX)}>
+      {/* Five buttons fill the row exactly; the rest wait off to the right, a scroll away (wheel too).
+          py-1 leaves room for the hover zoom, which overflow-x-auto would otherwise clip at the top. */}
+      <div ref={row} className="no-scrollbar grid snap-x snap-mandatory auto-cols-[20%] grid-flow-col overflow-x-auto py-1"
+        onWheel={(e) => row.current && (row.current.scrollLeft += e.deltaY + e.deltaX)}>
         <Toggle icon={s?.wifi === false ? "wifiOff" : "wifi"} label="Wi-Fi" color="#0a84ff" on={!!s?.wifi} available={s?.wifi != null}
           onClick={() => set("wifi", !s?.wifi)} />
         <Toggle icon={s?.bluetooth === false ? "bluetoothOff" : "bluetooth"} label="Bluetooth" color="#0a84ff" on={!!s?.bluetooth}

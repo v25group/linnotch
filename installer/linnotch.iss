@@ -3,10 +3,10 @@
 ; can start linnotch at sign-in, and installs WebView2 if it's missing.
 
 #ifndef AppVersion
-  #define AppVersion "0.1.0-alpha.1"
+  #define AppVersion "0.1.0-alpha.2"
 #endif
 #ifndef FileVersion
-  #define FileVersion "0.1.0.1"
+  #define FileVersion "0.1.0.2"
 #endif
 #define AppName "linnotch"
 #define AppExe "linnotch.exe"
@@ -76,6 +76,8 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "Start linnotch now"; Flags: nowait postinstall skipifsilent
+; The in-app updater (src-tauri/src/update.rs) installs silently with /UPDATE: start the new version.
+Filename: "{app}\{#AppExe}"; Flags: nowait; Check: IsUpdate
 
 [UninstallRun]
 ; Stop it, then undo what the Developer tab set up (PATH entry, shell profiles, Claude Code hooks)
@@ -95,6 +97,11 @@ const
 
 var
   DownloadPage: TDownloadWizardPage;
+
+function IsUpdate(): Boolean;
+begin
+  Result := Pos('/UPDATE', Uppercase(GetCmdTail)) > 0;
+end;
 
 function HasWebView2(): Boolean;
 var

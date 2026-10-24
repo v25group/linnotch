@@ -1,4 +1,5 @@
 # Builds the release binaries and the installer: installer\Output\linnotch-<version>-setup.exe
+# plus its .sha256 and the updater signature .sig (upload all three to the GitHub release).
 # Run from anywhere: powershell -File installer\build.ps1
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent
@@ -26,5 +27,12 @@ if ($LASTEXITCODE) { throw "Inno Setup failed" }
 $setup = Get-Item "installer\Output\linnotch-$version-setup.exe"
 $hash = (Get-FileHash $setup -Algorithm SHA256).Hash
 "$hash  $($setup.Name)" | Out-File "installer\Output\linnotch-$version-setup.exe.sha256" -Encoding ascii
+
+# The in-app updater installs only setups signed with this key (public half in src-tauri/src/update.rs).
+# Upload the .sig next to the setup on the GitHub release. Override the key path with LINNOTCH_SIGNING_KEY.
+$key = if ($env:LINNOTCH_SIGNING_KEY) { $env:LINNOTCH_SIGNING_KEY } else { "$env:USERPROFILE\.tauri\linnotch.key" }
+if (-not (Test-Path $key)) { throw "Signing key not found at $key; updates can't be published without it" }
+npx tauri signer sign -f $key "--password=$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD" $setup.FullName
+if ($LASTEXITCODE) { throw "signing the setup failed" }
 Write-Host "Done: $($setup.FullName) ($([math]::Round($setup.Length / 1MB, 1)) MB)" -ForegroundColor Green
 Write-Host "SHA-256: $hash"

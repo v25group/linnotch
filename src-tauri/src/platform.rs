@@ -49,10 +49,21 @@ pub fn foreground_window() -> isize {
 
 /// True while a fullscreen game, video or presentation is in front.
 pub fn fullscreen_app_running() -> bool {
+    // The desktop (Progman/WorkerW) covers the whole monitor, so Windows reports it as QUNS_BUSY.
+    if is_desktop(foreground_window()) {
+        return false;
+    }
     matches!(
         unsafe { SHQueryUserNotificationState() },
         Ok(QUNS_BUSY | QUNS_RUNNING_D3D_FULL_SCREEN | QUNS_PRESENTATION_MODE)
     )
+}
+
+fn is_desktop(hwnd: isize) -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::GetClassNameW;
+    let mut buf = [0u16; 16];
+    let n = unsafe { GetClassNameW(HWND(hwnd as *mut _), &mut buf) } as usize;
+    matches!(String::from_utf16_lossy(&buf[..n]).as_str(), "Progman" | "WorkerW")
 }
 
 #[derive(Clone, Copy, PartialEq, serde::Serialize)]
@@ -175,6 +186,20 @@ pub fn first_instance() -> bool {
     use windows::Win32::System::Threading::CreateMutexW;
     let created = unsafe { CreateMutexW(None, true, windows::core::w!(r"Local\linnotch.island")) };
     created.is_ok() && unsafe { GetLastError() } != ERROR_ALREADY_EXISTS
+}
+
+/// Hands `arg` (a file, URL or `shell:` path) to Explorer, which opens it the way a double-click would.
+pub fn explorer(arg: impl AsRef<std::ffi::OsStr>) -> Result<(), String> {
+    std::process::Command::new("explorer.exe").arg(arg).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// Whether `path` sits directly in `dir` (both resolved, so `..` and junctions can't escape).
+/// False when either can't be resolved, never "both unknown, so equal".
+pub fn directly_in(path: &std::path::Path, dir: &std::path::Path) -> bool {
+    match (path.parent().and_then(|p| p.canonicalize().ok()), dir.canonicalize().ok()) {
+        (Some(parent), Some(dir)) => parent == dir,
+        _ => false,
+    }
 }
 
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";

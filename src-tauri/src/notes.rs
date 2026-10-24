@@ -30,8 +30,8 @@ fn dir() -> Result<PathBuf, String> {
 }
 
 fn in_notes(path: &Path) -> bool {
-    let (Ok(dir), Some(parent)) = (dir(), path.parent()) else { return false };
-    parent.canonicalize().ok() == dir.canonicalize().ok() && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("txt"))
+    let Ok(dir) = dir() else { return false };
+    crate::platform::directly_in(path, &dir) && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("txt"))
 }
 
 /// Only our notes and files dropped on the island this session.

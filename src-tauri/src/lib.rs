@@ -20,6 +20,8 @@ mod media;
 mod platform;
 #[cfg(windows)]
 mod system;
+#[cfg(windows)]
+mod update;
 
 use serde::Serialize;
 use std::path::PathBuf;
@@ -82,11 +84,7 @@ fn reveal(path: String) -> Result<(), String> {
     if !PathBuf::from(&path).is_file() {
         return Err(format!("not a file: {path}"));
     }
-    std::process::Command::new("explorer")
-        .arg(format!("/select,{path}"))
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    platform::explorer(format!("/select,{path}"))
 }
 
 /// Is `(x, y)` (logical px, relative to a window `window_w` wide) inside the pill?
@@ -201,7 +199,7 @@ fn tray(app: &tauri::App) -> tauri::Result<()> {
             platform::set_start_with_windows(on);
         }
         "issue" => {
-            let _ = std::process::Command::new("explorer.exe").arg(ISSUES_URL).spawn();
+            let _ = platform::explorer(ISSUES_URL);
         }
         "quit" => app.exit(0),
         _ => {}
@@ -294,7 +292,7 @@ pub fn run() {
             screenshots::screenshots, screenshots::screenshot_copy, screenshots::screenshot_open,
             downloads::open_download, toggles::toggles, toggles::set_toggle, toggles::open_notification_center, openwith::apps_for, openwith::open_with, radio::radio_watch, radio::radio_stop,
             dev::focus_window, dev::ports, dev::stop_port, dev::open_url, dev::meters, dev::github, dev::dev_setup, dev::install_cli, dev::connect_claude, clipboard::clipboard_write,
-            dev::answer_ask, dev::free_port, dev::containers, dev::stop_container, dev::shell_watch, notes::notes_list, notes::note_read, notes::note_write, notes::note_new, notes::note_import, notes::note_delete, notes::note_open])
+            dev::answer_ask, dev::free_port, dev::containers, dev::stop_container, dev::shell_watch, notes::notes_list, notes::note_read, notes::note_write, notes::note_new, notes::note_import, notes::note_delete, notes::note_open, update::update_check, update::update_install])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

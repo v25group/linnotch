@@ -7,7 +7,7 @@ import { Icon, type IconName } from "./components/icons";
 import { TooltipLayer, useTip } from "./components/tooltip";
 import { Bars, NowPlayingLabel, PlayerCard, TrackFlash, useMedia } from "./features/music/media";
 import { LibraryView, useLibrary, useLocalPlayer, type Track } from "./features/music/library";
-import { ShortcutsView } from "./features/shortcuts/shortcuts";
+import { AboutView, UpdateFlash, useUpdater } from "./features/about/about";
 import { RadioView, useRadio } from "./features/music/radio";
 import { CONVERT, ConvertView, ISLAND_NOTES, ISLAND_PLAYER, OpenWithView, appAt, looksLikeFile, useOpenWith, withIslandPlayer } from "./features/files/openwith";
 import { COLOR, Collapsed, FlashView, NoteCard, chime, flashColor, useSystem, type Flash } from "./island/system";
@@ -145,7 +145,7 @@ const DOCK: { id: HoverTab; icon: IconName; label: string }[] = [
   { id: "notifications", icon: "bell", label: "Notifications" },
   { id: "shelf", icon: "shelf", label: "Screenshots" },
   { id: "dev", icon: "code", label: "Developer" },
-  { id: "keys", icon: "keyboard", label: "Shortcuts" },
+  { id: "keys", icon: "info", label: "About" },
 ];
 
 function DockButton({ item, index, active, busy, badge, onClick }: {
@@ -342,6 +342,8 @@ export default function App() {
   // The island's own player wins while it plays, or when nothing else is playing.
   const player = local.media && (local.media.playing || !system.media?.playing) ? local : system;
   const playing = player.media?.playing ? player.media : null;
+  // Updates restart the island, so automatic ones wait until it's closed and its own player is quiet.
+  const updater = useUpdater(() => !hovered && !local.media?.playing, useCallback((version: string) => show({ kind: "update", version }), [show]));
 
   // Hover opens on the player when there's music, otherwise on the timer.
   const defaultTab: HoverTab = player.media ? "music" : "today";
@@ -570,7 +572,7 @@ export default function App() {
             )}
 
             {view === "flash" && flash && (
-              flash.kind === "track" ? <TrackFlash player={player} /> : flash.kind === "screenshot" ? <ShotFlash shot={flash} /> : flash.kind === "download" ? <DownloadFlash download={flash} /> : flash.kind === "dev" ? <DevFlashView flash={flash.dev} /> : <FlashView flash={flash} />
+              flash.kind === "track" ? <TrackFlash player={player} /> : flash.kind === "screenshot" ? <ShotFlash shot={flash} /> : flash.kind === "download" ? <DownloadFlash download={flash} /> : flash.kind === "update" ? <UpdateFlash version={flash.version} /> : flash.kind === "dev" ? <DevFlashView flash={flash.dev} /> : <FlashView flash={flash} />
             )}
 
             {view === "hint" && !dragging && (
@@ -600,7 +602,7 @@ export default function App() {
                     {tab === "shelf" && <ShelfView shots={shots} />}
                     {tab === "notes" && <NotesView open={noteToOpen} onOpened={() => setNoteToOpen(null)} />}
                     {tab === "dev" && <DevView dev={dev} github={github} meters={meters} />}
-                    {tab === "keys" && <ShortcutsView />}
+                    {tab === "keys" && <AboutView updater={updater} />}
                   </motion.div>
                 </AnimatePresence>
               </div>

@@ -141,7 +141,15 @@ static ASKS: Mutex<Option<HashMap<String, std::sync::mpsc::Sender<bool>>>> = Mut
 /// in its terminal as usual). Never answers on its own.
 fn ask(window: &WebviewWindow, mut event: DevEvent) -> String {
     let (tx, rx) = std::sync::mpsc::channel();
-    ASKS.lock().unwrap().get_or_insert_default().insert(event.id.clone(), tx);
+    {
+        let mut asks = ASKS.lock().unwrap();
+        let asks = asks.get_or_insert_default();
+        // A second question under the same id would replace the first's answer channel; send it to the terminal.
+        if asks.contains_key(&event.id) {
+            return String::new();
+        }
+        asks.insert(event.id.clone(), tx);
+    }
     let id = event.id.clone();
     event.ask = Some(true);
     let _ = window.emit("dev", event);
@@ -161,6 +169,11 @@ fn ask(window: &WebviewWindow, mut event: DevEvent) -> String {
 pub fn answer_ask(id: String, allow: bool) -> Result<(), String> {
     let tx = ASKS.lock().unwrap().get_or_insert_default().remove(&id).ok_or("That question has already gone to the terminal.")?;
     tx.send(allow).map_err(|_| "That question has already gone to the terminal.".to_string())
+}
+
+/// Compares in constant time, so response timing doesn't leak how much of a guess was right.
+fn same_token(given: &str, token: &str) -> bool {
+    given.len() == token.len() && given.bytes().zip(token.bytes()).fold(0, |acc, (a, b)| acc | (a ^ b)) == 0
 }
 
 /// `POST /event` (a report) or `POST /ask` (a question that waits for an answer), with the token
@@ -188,7 +201,7 @@ fn read_event(stream: impl Read, token: &str) -> Result<(bool, DevEvent), &'stat
         if let Some((name, value)) = header.split_once(':') {
             match name.trim().to_ascii_lowercase().as_str() {
                 "content-length" => length = value.trim().parse().map_err(|_| BAD)?,
-                "x-linnotch-token" => authorized = value.trim() == token,
+                "x-linnotch-token" => authorized = same_token(value.trim(), token),
                 _ => {}
             }
         }
@@ -417,7 +430,7 @@ pub fn open_url(url: String) -> Result<(), String> {
     if !local && !url.starts_with("https://github.com/") && !url.starts_with("https://www.v25group.com/") {
         return Err("not a link the island opens".into());
     }
-    std::process::Command::new("explorer.exe").arg(url).spawn().map(|_| ()).map_err(|e| e.to_string())
+    crate::platform::explorer(url)
 }
 
 /// Pops up when a dev server starts listening.
@@ -922,6 +935,18 @@ mod tests {
 
     fn request(token: &str, body: &str) -> String {
         format!("POST /event HTTP/1.1\r\nHost: x\r\nX-Linnotch-Token: {token}\r\nContent-Length: {}\r\n\r\n{body}", body.len())
+    }
+
+    #[test]
+    fn tokens_and_folders_are_matched_exactly() {
+        assert!(same_token("abc", "abc"));
+        assert!(!same_token("abd", "abc"));
+        assert!(!same_token("ab", "abc"));
+        let tmp = std::env::temp_dir();
+        assert!(crate::platform::directly_in(&tmp.join("x.txt"), &tmp));
+        assert!(!crate::platform::directly_in(&tmp.join("sub").join("..").join("..").join("x.txt"), &tmp));
+        let missing = tmp.join("linnotch-no-such-dir");
+        assert!(!crate::platform::directly_in(&missing.join("x.txt"), &missing), "both unresolvable is not a match");
     }
 
     #[test]

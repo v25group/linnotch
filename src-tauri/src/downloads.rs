@@ -78,10 +78,10 @@ pub fn spawn(app: AppHandle, window: WebviewWindow) {
 pub fn open_download(app: AppHandle, path: String) -> Result<(), String> {
     let dir = app.path().download_dir().map_err(|e| e.to_string())?;
     let path = PathBuf::from(path);
-    if path.parent().and_then(|p| p.canonicalize().ok()) != dir.canonicalize().ok() || !path.is_file() {
+    if !crate::platform::directly_in(&path, &dir) || !path.is_file() {
         return Err("not a download".into());
     }
-    std::process::Command::new("explorer.exe").arg(path).spawn().map(|_| ()).map_err(|e| e.to_string())
+    crate::platform::explorer(path)
 }
 
 #[cfg(test)]

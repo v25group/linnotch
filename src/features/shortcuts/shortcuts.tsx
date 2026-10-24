@@ -1,9 +1,6 @@
 // The global shortcuts, as people see them. Rust registers the same list (SHORTCUTS in
-// src-tauri/src/lib.rs) and sends the action name as a "shortcut" event.
-import { invoke } from "@tauri-apps/api/core";
+// src-tauri/src/lib.rs) and sends the action name as a "shortcut" event. Shown in the About tab.
 import { Icon } from "../../components/icons";
-
-const link = (url: string) => () => invoke("open_url", { url }).catch(() => {});
 
 export const SHORTCUTS = [
   { key: "Space", action: "Play / pause" },
@@ -49,15 +46,6 @@ export function ShortcutsView() {
           <Key wide>Shift</Key>
           <span className="truncate text-[12px] text-white/75">+ drag a file: convert</span>
         </div>
-      </div>
-      {/* About: who makes it, where to report things, and the credit Open-Meteo asks for. */}
-      <div className="flex items-center gap-1.5 px-1 text-[10.5px] text-white/35">
-        <span>linnotch {__APP_VERSION__} · by</span>
-        <button onClick={link("https://www.v25group.com/")} className="hover:text-white/75">V25Group</button>
-        <span>·</span>
-        <button onClick={link("https://github.com/v25group/linnotch/issues")} className="hover:text-white/75">Report an issue</button>
-        <span className="flex-1" />
-        <span>Weather by Open-Meteo</span>
       </div>
     </div>
   );

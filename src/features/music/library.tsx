@@ -20,6 +20,9 @@ export type Track = {
 };
 
 const DIR_KEY = "island.libraryDir";
+// Radio: how many reconnects in a row before "unavailable", and how long a frozen stream is tolerated.
+const MAX_RETRIES = 6;
+const STALL_MS = 12_000;
 
 export function useLocalPlayer(onTrackChange: () => void, onStart: () => void) {
   const audio = useMemo(() => new Audio(), []);
@@ -44,6 +47,42 @@ export function useLocalPlayer(onTrackChange: () => void, onStart: () => void) {
   // Audio events fire outside React; they read the latest state from here.
   const state = useRef({ queue, index, shuffle, repeat, failures: 0 });
   state.current = { ...state.current, queue, index, shuffle, repeat };
+
+  // Radio stream health, kept outside state.current (which is replaced every render) so timers see writes.
+  // want: the user wants the station playing; lastMove: when audio last advanced.
+  const radio = useRef({ want: false, retries: 0, lastTime: 0, lastMove: 0, timer: 0 });
+  const [attempt, setAttempt] = useState(0); // restarts the song-title reader after a reconnect
+
+  // A dropped or frozen station rejoins the broadcast by itself, backing off, before giving up.
+  const reconnect = useCallback((now = false) => {
+    const r = radio.current;
+    const t = state.current.queue[state.current.index];
+    if (!t?.live || !t.url || !r.want) return;
+    clearTimeout(r.timer);
+    setBuffering(true);
+    // Offline: don't burn retries, the "online" listener picks it back up.
+    if (!navigator.onLine) return void (r.timer = 0);
+    if (r.retries >= MAX_RETRIES) {
+      r.want = false;
+      r.timer = 0;
+      setBuffering(false);
+      setFailed(true);
+      setPlaying(false);
+      audio.pause();
+      return;
+    }
+    const delay = now ? 0 : Math.min(1000 * 2 ** r.retries, 8000);
+    r.retries++;
+    r.lastMove = Date.now() + delay;
+    r.timer = window.setTimeout(() => {
+      r.timer = 0;
+      if (!r.want || state.current.queue[state.current.index]?.path !== t.path) return;
+      r.lastTime = 0; // a fresh connection's clock starts at 0
+      audio.src = t.url!;
+      audio.play().catch(() => {});
+      setAttempt((a) => a + 1);
+    }, delay);
+  }, [audio]);
 
   const step = useCallback((by: 1 | -1, auto: boolean) => {
     const { queue, index, shuffle, repeat } = state.current;
@@ -74,32 +113,64 @@ export function useLocalPlayer(onTrackChange: () => void, onStart: () => void) {
         setBuffering(false);
         setFailed(false);
       }],
-      ["pause", () => setPlaying(false)],
-      ["timeupdate", () => setPosition(audio.currentTime * 1000)],
+      ["pause", () => {
+        setPlaying(false);
+        // A pause during a reconnect isn't the user's; keep saying "Connecting…".
+        if (!radio.current.want) setBuffering(false);
+      }],
+      ["timeupdate", () => {
+        setPosition(audio.currentTime * 1000);
+        // Chromium can fire "waiting" on a live stream and never "playing" after it, so audio
+        // actually advancing is what clears "Connecting…".
+        const r = radio.current;
+        if (audio.currentTime > r.lastTime) {
+          r.lastTime = audio.currentTime;
+          r.lastMove = Date.now();
+          r.retries = 0;
+          setBuffering(false);
+          setFailed(false);
+        }
+      }],
       ["loadedmetadata", () => {
         state.current.failures = 0;
         // A live stream reports an infinite duration.
         setDuration(Number.isFinite(audio.duration) ? audio.duration * 1000 : 0);
       }],
-      ["ended", () => !state.current.queue[state.current.index]?.live && step(1, true)],
+      // A live stream "ends" when the server drops the connection: rejoin it.
+      ["ended", () => (state.current.queue[state.current.index]?.live ? reconnect() : step(1, true))],
       // A file the webview can't decode (e.g. ALAC) is skipped, but stop once every file has failed.
-      // A station that's down just says so; hopping to another one on its own would be confusing.
+      // A station retries on its own, then says it's down; hopping to another one would be confusing.
       ["error", () => {
+        if (state.current.queue[state.current.index]?.live) return reconnect();
         setBuffering(false);
-        if (state.current.queue[state.current.index]?.live) {
-          setFailed(true);
-          setPlaying(false);
-        } else if (++state.current.failures < state.current.queue.length) step(1, true);
+        if (++state.current.failures < state.current.queue.length) step(1, true);
         else setPlaying(false);
       }],
     ];
     handlers.forEach(([name, f]) => audio.addEventListener(name, f));
-    return () => handlers.forEach(([name, f]) => audio.removeEventListener(name, f));
+    // Back online: rejoin straight away with a fresh set of retries.
+    const online = () => {
+      radio.current.retries = 0;
+      reconnect(true);
+    };
+    window.addEventListener("online", online);
+    // Watchdog: a station that stops advancing without any event (a silent stall) is rejoined.
+    const watchdog = window.setInterval(() => {
+      const r = radio.current;
+      if (r.want && !r.timer && Date.now() - r.lastMove > STALL_MS) reconnect(true);
+    }, 2000);
+    return () => {
+      handlers.forEach(([name, f]) => audio.removeEventListener(name, f));
+      window.removeEventListener("online", online);
+      clearInterval(watchdog);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [audio, step]);
+  }, [audio, step, reconnect]);
 
   useEffect(() => {
     if (!track) return;
+    clearTimeout(radio.current.timer);
+    radio.current = { want: !!track.live, retries: 0, lastTime: 0, lastMove: Date.now(), timer: 0 };
     audio.src = track.url ?? convertFileSrc(track.path);
     audio.play().catch(() => {});
     setPosition(0);
@@ -130,7 +201,7 @@ export function useLocalPlayer(onTrackChange: () => void, onStart: () => void) {
     if (track?.live && track.url && playing) invoke("radio_watch", { id: track.path, url: track.url }).catch(() => {});
     else invoke("radio_stop").catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [track?.path, nonce, playing]);
+  }, [track?.path, nonce, playing, attempt]);
 
   useEffect(() => {
     let live = true;
@@ -144,7 +215,8 @@ export function useLocalPlayer(onTrackChange: () => void, onStart: () => void) {
   const media: Media | null = track && {
     title: song || track.title,
     artist: failed ? "Station unavailable right now" : buffering ? "Connecting…" : song ? [singer, track.title].filter(Boolean).join(" · ") : track.artist,
-    album: track.album, app: track.live ? "Radio" : "linnotch", playing,
+    // A station that's reconnecting still counts as playing, so the button doesn't flip to "play".
+    album: track.album, app: track.live ? "Radio" : "linnotch", playing: playing || (!!track.live && buffering && radio.current.want),
     position, duration, updated: Date.now(),
     can_next: queue.length > 1, can_previous: track.live ? queue.length > 1 : true, can_seek: !track.live && duration > 0,
     shuffle: track.live ? null : shuffle, repeat: track.live ? null : repeat, live: track.live,
@@ -154,15 +226,25 @@ export function useLocalPlayer(onTrackChange: () => void, onStart: () => void) {
     media, art, color, position, track, queue, index,
     control: (action: "toggle" | "next" | "previous" | "shuffle" | "repeat") => {
       if (action === "toggle") {
-        if (audio.paused) {
+        const r = radio.current;
+        // A station mid-reconnect is paused underneath but "playing" to the user.
+        if (track?.live ? !r.want : audio.paused) {
           onStart();
           // Resuming a station rejoins the broadcast instead of playing what was buffered.
           if (track?.live && track.url) {
+            Object.assign(r, { want: true, retries: 0, lastTime: 0, lastMove: Date.now() });
             audio.src = track.url;
             setBuffering(true);
+            setFailed(false);
           }
           audio.play().catch(() => {});
-        } else audio.pause();
+        } else {
+          r.want = false;
+          clearTimeout(r.timer);
+          r.timer = 0;
+          setBuffering(false);
+          audio.pause();
+        }
       }
       if (action === "next") step(1, false);
       // Like every player: "previous" restarts the song unless it has only just begun.

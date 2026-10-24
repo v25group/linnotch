@@ -31,10 +31,11 @@ export type Flash =
   | { kind: "opened"; app: string; error?: string }
   | { kind: "screenshot"; path: string; at: number } // drawn by src/features/screenshots/shelf.tsx
   | { kind: "download"; path: string; name: string; size: number } // drawn by src/features/downloads/downloads.tsx
-  | { kind: "dev"; dev: DevFlash }; // drawn by src/features/developer/dev.tsx
+  | { kind: "dev"; dev: DevFlash } // drawn by src/features/developer/dev.tsx
+  | { kind: "update"; version: string }; // drawn by src/features/about/about.tsx
 
 const FLASH_MS: Record<Flash["kind"], number> = {
-  power: 2600, volume: 1500, brightness: 1500, bluetooth: 3000, privacy: 3000, notification: 5000, event: 6000, timer: 8000, track: 3000, opened: 2200, screenshot: 5000, download: 5000, dev: 6000,
+  power: 2600, volume: 1500, brightness: 1500, bluetooth: 3000, privacy: 3000, notification: 5000, event: 6000, timer: 8000, track: 3000, opened: 2200, screenshot: 5000, download: 5000, dev: 6000, update: 6000,
 };
 
 export const COLOR = {
@@ -53,6 +54,7 @@ export function flashColor(f: Flash) {
     case "event": return COLOR.event;
     case "timer": return COLOR.tool;
     case "dev": return f.dev.color;
+    case "update": return COLOR.charge;
     default: return COLOR.white;
   }
 }
@@ -403,6 +405,7 @@ export function FlashView({ flash }: { flash: Flash }) {
     case "screenshot":
     case "download":
     case "dev":
+    case "update":
       return null;
     case "opened":
       return flash.error

@@ -321,7 +321,7 @@ pub fn open_app(aumid: String) -> Result<(), String> {
     if !valid_aumid(&aumid) {
         return Err("not an app id".into());
     }
-    std::process::Command::new("explorer.exe").arg(format!("shell:AppsFolder\\{aumid}")).spawn().map(|_| ()).map_err(|e| e.to_string())
+    crate::platform::explorer(format!("shell:AppsFolder\\{aumid}"))
 }
 
 /// Removes a notification from the Windows notification centre.

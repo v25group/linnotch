@@ -1,13 +1,18 @@
 {
   "name": "linnotch",
   "private": true,
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "linnotch: a Dynamic Island for Windows",
   "license": "MIT",
   "author": "V25Group (Venticinque Aeyon Groupe) <https://www.v25group.com/>",
   "homepage": "https://github.com/v25group/linnotch",
-  "repository": { "type": "git", "url": "https://github.com/v25group/linnotch.git" },
-  "bugs": { "url": "https://github.com/v25group/linnotch/issues" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/v25group/linnotch.git"
+  },
+  "bugs": {
+    "url": "https://github.com/v25group/linnotch/issues"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

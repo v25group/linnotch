@@ -79,15 +79,18 @@ pub async fn scan_library(app: AppHandle, dir: Option<String>) -> Result<(String
     if !dir.is_dir() {
         return Err(format!("not a folder: {}", dir.display()));
     }
-    app.asset_protocol_scope().allow_directory(&dir, true).map_err(|e| e.to_string())?;
     let shown = dir.to_string_lossy().into_owned();
     tauri::async_runtime::spawn_blocking(move || {
         let mut paths = vec![];
         collect(&dir, &mut paths);
-        (shown, paths.iter().map(|p| read_track(p)).collect())
+        // Only the tracks found, not the whole folder: a library at C:\ mustn't open every file to the webview.
+        for p in &paths {
+            app.asset_protocol_scope().allow_file(p).map_err(|e| e.to_string())?;
+        }
+        Ok((shown, paths.iter().map(|p| read_track(p)).collect()))
     })
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?
 }
 
 /// Tags for files dropped on the island's player tile; also lets the webview play them.

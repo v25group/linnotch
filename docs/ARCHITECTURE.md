@@ -25,7 +25,8 @@ linnotch/
 │       ├── downloads/        "Download finished" pop-up
 │       ├── files/            Drag a file in: Open with / Convert
 │       ├── developer/        Developer tab: tasks, Claude Code, ports, GitHub, tools
-│       └── shortcuts/        Keyboard shortcuts + about line
+│       ├── about/            About tab: version, updates, shortcuts
+│       └── shortcuts/        Keyboard shortcuts list (shown in About)
 ├── src-tauri/                The Rust side
 │   ├── src/lib.rs            Startup, the window watch loop, global shortcuts, tray, commands list
 │   ├── src/platform.rs       Every Win32 window trick (click-through, always on top, foreground…)
@@ -41,6 +42,7 @@ linnotch/
 │   ├── src/toggles.rs        Wi-Fi, Bluetooth, dark mode, mic mute
 │   ├── src/notes.rs          Notes files
 │   ├── src/dev.rs            Developer tab: local endpoint, ports, Docker, GitHub, setup and cleanup
+│   ├── src/update.rs         Signed updates from GitHub releases
 │   ├── src/bin/notch.rs      The `notch` command (a separate small console program)
 │   ├── capabilities/         What the page may call (Tauri permissions)
 │   └── tauri.conf.json       Window, bundle and app settings

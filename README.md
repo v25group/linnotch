@@ -2,7 +2,7 @@
 
 **A Dynamic Island for Windows.** linnotch sits at the top of your screen. It shows what's playing, your notifications, timers and more, and opens into a panel of everyday tools when you hover over it.
 
-> **This is an alpha (0.1.0-alpha.1).** It works well day to day, but expect rough edges. Please [report anything odd](https://github.com/v25group/linnotch/issues).
+> **This is an alpha (0.1.0-alpha.2).** It works well day to day, but expect rough edges. Please [report anything odd](https://github.com/v25group/linnotch/issues).
 
 Made by [V25Group](https://www.v25group.com/) (Venticinque Aeyon Groupe).
 
@@ -26,7 +26,7 @@ Made by [V25Group](https://www.v25group.com/) (Venticinque Aeyon Groupe).
 | **Notifications** | History of your notifications. Hover one to reply in its app or dismiss it. |
 | **Screenshots** | Recent screenshots: drag them into any app, copy, or open. |
 | **Developer** | See below. Turn it off in Today if you don't need it. |
-| **Shortcuts** | All keyboard shortcuts. |
+| **About** | Version, updates (install now, or automatically), and all keyboard shortcuts. |
 
 **Drag a file onto the notch** to open it with any app. Songs can play right in linnotch, and text files open as notes. **Hold Shift while dragging** to convert audio, video or images to another format (needs FFmpeg).
 
@@ -55,7 +55,7 @@ If another app already uses one of these, linnotch skips that one and the rest s
 
 ## Install
 
-1. Download **`linnotch-0.1.0-alpha.1-setup.exe`** from [Releases](https://github.com/v25group/linnotch/releases).
+1. Download **`linnotch-0.1.0-alpha.2-setup.exe`** from [Releases](https://github.com/v25group/linnotch/releases).
 2. Run it. It installs for your user only, with no admin rights needed.
 3. **Windows SmartScreen** may say "Windows protected your PC", because this alpha isn't code-signed yet. Click **More info → Run anyway**.
 
