@@ -168,7 +168,7 @@ const SHORTCUTS: &[(Code, &str)] = &[
     (Code::KeyB, "previous"),
     (Code::KeyI, "open"),
     (Code::KeyL, "library"),
-    (Code::KeyR, "radio"),
+    (Code::KeyF, "radio"), // F for FM: Ctrl+Alt+R is often taken (NVIDIA overlay...)
     (Code::KeyT, "timer"),
     (Code::KeyV, "clipboard"),
     (Code::KeyS, "shelf"),

@@ -253,9 +253,17 @@ fn run(args: &[String]) -> i32 {
     };
 
     // Ctrl+C stops the command (it shares this console) but not us, so the island hears it stopped.
+    // A handler, not SetConsoleCtrlHandler(None, true): that "ignore Ctrl+C" flag is inherited, so
+    // the command itself (npm run dev...) couldn't be stopped. Handlers aren't inherited.
     #[cfg(windows)]
     unsafe {
-        let _ = windows::Win32::System::Console::SetConsoleCtrlHandler(None, true);
+        use windows::Win32::System::Console::{CTRL_BREAK_EVENT, CTRL_C_EVENT, SetConsoleCtrlHandler};
+        unsafe extern "system" fn outlive_ctrl_c(kind: u32) -> windows::core::BOOL {
+            (kind == CTRL_C_EVENT || kind == CTRL_BREAK_EVENT).into()
+        }
+        // Clear an "ignore" flag we inherited ourselves (some launchers set it) so the command gets Ctrl+C too.
+        let _ = SetConsoleCtrlHandler(None, false);
+        let _ = SetConsoleCtrlHandler(Some(outlive_ctrl_c), true);
     }
     let started = Instant::now();
     report("running", None, None, None, None);
@@ -327,8 +335,8 @@ fn describe(tool: &str, input: &serde_json::Value) -> String {
 /// Claude Code hook: tells the island when a session starts working, needs you, or finishes, and
 /// lets you allow or deny a tool from the island. Prints nothing except a permission decision
 /// (UserPromptSubmit output would be added to the conversation) and always exits 0, so it can
-/// never get in Claude's way.
-fn hook() {
+/// never get in Claude's way. Claude Code runs it as `notch-hook.exe` (src/bin/notch-hook.rs).
+pub fn hook() {
     let mut input = String::new();
     let _ = std::io::stdin().take(1 << 20).read_to_string(&mut input);
     let Ok(v) = serde_json::from_str::<serde_json::Value>(&input) else { return };

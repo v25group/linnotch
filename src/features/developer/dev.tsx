@@ -5,8 +5,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AnimatePresence, motion } from "motion/react";
 import { Icon, type IconName } from "../../components/icons";
-import { COLOR, FlashRow, ago, clockText, useNow, type Flash } from "../../island/system";
+import { COLOR, ago, clockText, useNow, type Flash } from "../../island/system";
 import { useTip } from "../../components/tooltip";
+import claudeLogo from "../../assets/claude.png";
+import { Kit, type Mood } from "../../island/kit";
+import claudeThinking from "../../assets/claude-thinking.gif";
 import { load, save } from "../../lib/storage";
 
 type DevEvent = {
@@ -29,6 +32,8 @@ export type DevFlash = {
   ask?: string;
   /** Port a failed command couldn't get: the card offers to free it. */
   port?: number | null;
+  /** From Claude Code: shown with its logo instead of the icon. */
+  agent?: boolean;
 };
 
 const DEV_KEY = "island.devTab";
@@ -96,11 +101,11 @@ export function useDev(show: (f: Flash) => void, enabled: boolean) {
           } });
         } else if (job.ask) {
           announce.current({ kind: "dev", dev: {
-            icon: "agent", color: AMBER, hwnd: job.hwnd, ask: job.id, title: `${job.title} asks to run`, subtitle: job.detail ?? undefined,
+            icon: "agent", agent: true, color: AMBER, hwnd: job.hwnd, ask: job.id, title: `${job.title} asks to run`, subtitle: job.detail ?? undefined,
           } });
         } else if (job.kind === "agent" && (job.state === "waiting" || job.state === "done") && prev?.state !== job.state) {
           announce.current({ kind: "dev", dev: {
-            icon: "agent", color: job.state === "waiting" ? AMBER : GREEN, hwnd: job.hwnd,
+            icon: "agent", agent: true, color: job.state === "waiting" ? AMBER : GREEN, hwnd: job.hwnd,
             title: `${job.title} ${job.state === "waiting" ? "needs you" : "finished"}`, subtitle: job.detail ?? undefined,
           } });
         }
@@ -279,8 +284,27 @@ export function DevChip({ dev, meters }: { dev: Dev; meters: Meters | null }) {
   );
 }
 
+/** Claude's logo for its pop-ups, the flash's icon for everything else. */
+function Mark({ flash, size }: { flash: DevFlash; size: number }) {
+  return flash.agent
+    ? <img src={claudeLogo} alt="Claude" className="shrink-0 object-contain" style={{ width: size, height: size }} draggable={false} />
+    : <span className="grid shrink-0 place-items-center" style={{ color: flash.color }}><Icon name={flash.icon} size={size} /></span>;
+}
+
+/** The pop-up: centred like the download and update ones, the mark drops in beside the title. */
 export function DevFlashView({ flash }: { flash: DevFlash }) {
-  return <FlashRow icon={flash.icon} color={flash.color} title={flash.title} subtitle={flash.subtitle} />;
+  return (
+    <div className="flex h-15 flex-col items-center justify-center gap-0.5 px-5 text-center">
+      <div className="flex max-w-full items-center gap-1.5 text-[13.5px] font-semibold">
+        <motion.span className="grid shrink-0 place-items-center"
+          initial={{ y: -12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 400, damping: 18 }}>
+          <Mark flash={flash} size={16} />
+        </motion.span>
+        <span className="truncate">{flash.title}</span>
+      </div>
+      {flash.subtitle && <div className={`max-w-full truncate text-[11.5px] ${flash.ask ? "font-mono" : ""}`} style={{ color: flash.ask ? flash.color : "rgb(255 255 255 / 0.55)" }}>{flash.subtitle}</div>}
+    </div>
+  );
 }
 
 const solid = "flex h-8 flex-1 items-center justify-center gap-1.5 rounded-full text-[12.5px] font-semibold hover:brightness-90";
@@ -314,17 +338,21 @@ function FreePortButton({ port, small }: { port: number; small?: boolean }) {
 
 export function DevCard({ flash, onDone }: { flash: DevFlash; onDone: () => void }) {
   return (
-    <div className="flex flex-col gap-3 p-3.5">
-      <div className="flex items-center gap-3">
-        <span style={{ color: flash.color }}><Icon name={flash.icon} size={28} /></span>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[14px] font-semibold">{flash.title}</div>
-          {flash.subtitle && (
-            <div className={`line-clamp-3 text-[12px] text-white/60 [overflow-wrap:anywhere] ${flash.ask ? "font-mono" : ""}`}>{flash.subtitle}</div>
-          )}
-        </div>
+    <div className="flex flex-col items-center gap-3 p-4 text-center">
+      {/* The mark front and centre in a tile, with a dot in the state's colour (amber asks, green done...). */}
+      <motion.div className="relative" initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 420, damping: 24 }}>
+        <span className="grid size-13 place-items-center rounded-2xl bg-white/8" style={{ boxShadow: "inset 0 0 0 1px rgb(255 255 255 / 0.08)" }}>
+          <Mark flash={flash} size={flash.agent ? 30 : 26} />
+        </span>
+        <span className="absolute -right-1 -bottom-1 size-3.5 rounded-full ring-2 ring-black" style={{ background: flash.color }} />
+      </motion.div>
+      <div className="w-full min-w-0">
+        <div className="truncate px-2 text-[14px] font-semibold">{flash.title}</div>
+        {flash.subtitle && (
+          <div className={`mt-1 line-clamp-3 px-1 text-[12px] [overflow-wrap:anywhere] ${flash.ask ? "rounded-lg bg-white/6 px-2 py-1.5 text-left font-mono text-white/75" : "text-white/55"}`}>{flash.subtitle}</div>
+        )}
       </div>
-      <div className="flex gap-2">
+      <div className="flex w-full gap-2">
         {flash.ask ? <AskButtons id={flash.ask} onDone={onDone} /> : (
           <>
             {flash.port && <FreePortButton port={flash.port} />}
@@ -365,8 +393,10 @@ function IconButton({ icon, tip, onClick, color }: { icon: IconName; tip: string
 const List = ({ children }: { children: React.ReactNode }) => (
   <div className="no-scrollbar -mx-1 max-h-52 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>{children}</div>
 );
-const Empty = ({ title, hint }: { title: string; hint?: React.ReactNode }) => (
+/** Kit naps when all is quiet and looks worried when something's wrong. */
+const Empty = ({ title, hint, kit = "sleep" }: { title: string; hint?: React.ReactNode; kit?: Mood }) => (
   <div className="flex h-24 flex-col items-center justify-center gap-1 px-4 text-center text-[12.5px] text-white/50">
+    <Kit mood={kit} size={24} />
     <div>{title}</div>
     {hint && <div className="text-[11.5px] text-white/35">{hint}</div>}
   </div>
@@ -434,7 +464,9 @@ function TasksPane({ dev, setup, onSetup }: { dev: Dev; setup: Setup | null; onS
               <div key={j.id} role="button" onClick={() => focus(j.hwnd)}
                 className="group flex cursor-pointer items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-white/6">
                 <span className="grid size-7 shrink-0 place-items-center" style={{ color }}>
-                  {j.state === "running" ? <Spinner size={16} color={color} /> : <Icon name={j.kind === "agent" ? "agent" : j.state === "failed" ? "failed" : "passed"} size={17} />}
+                  {j.kind === "agent"
+                    ? <img src={j.state === "running" ? claudeThinking : claudeLogo} alt="Claude" className={j.state === "running" ? "size-7" : "size-4.5"} draggable={false} />
+                    : j.state === "running" ? <Spinner size={16} color={color} /> : <Icon name={j.state === "failed" ? "failed" : "passed"} size={17} />}
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-mono text-[12px] text-white/90">{j.title}</div>
@@ -589,11 +621,11 @@ function runLook(r: Run): { color: string; label: string } {
 
 function GitHubPane({ github }: { github: GitHub }) {
   const now = useNow(60_000);
-  if (github.error === "gh-missing") return <Empty title="Needs the GitHub CLI." hint={<>Install it with <Code>winget install GitHub.cli</Code>, then <Code>gh auth login</Code></>} />;
-  if (github.error === "gh-auth") return <Empty title="Sign in to the GitHub CLI." hint={<>Run <Code>gh auth login</Code> in a terminal</>} />;
+  if (github.error === "gh-missing") return <Empty kit="worried" title="Needs the GitHub CLI." hint={<>Install it with <Code>winget install GitHub.cli</Code>, then <Code>gh auth login</Code></>} />;
+  if (github.error === "gh-auth") return <Empty kit="worried" title="Sign in to the GitHub CLI." hint={<>Run <Code>gh auth login</Code> in a terminal</>} />;
   if (!github.loaded) return <div className="flex h-24 items-center justify-center gap-2 text-[12.5px] text-white/50"><Spinner />Asking GitHub…</div>;
   const empty = !github.mine.length && !github.toReview.length && !github.issues.length && !github.runs.length;
-  if (github.error && empty) return <Empty title="Couldn't reach GitHub." hint={github.error} />;
+  if (github.error && empty) return <Empty kit="worried" title="Couldn't reach GitHub." hint={github.error} />;
   if (empty) return <Empty title="All quiet on GitHub." hint="Your pull requests, reviews asked of you, assigned issues and workflow runs show up here." />;
   return (
     <List>

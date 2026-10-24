@@ -6,6 +6,7 @@ import { Icon } from "../../components/icons";
 import { Bars } from "./media";
 import { type LocalPlayer, type Track } from "./library";
 import { load, save } from "../../lib/storage";
+import { Kit } from "../../island/kit";
 
 type Station = {
   stationuuid: string; name: string; url_resolved: string; favicon: string; tags: string;
@@ -237,7 +238,8 @@ export function RadioView({ radio, local }: { radio: Radio; local: LocalPlayer }
         <div className="flex h-24 flex-col items-center justify-center gap-1 text-center text-[12.5px] text-white/50">
           {radio.showingFavorites ? (
             <>
-              <div>No favorite stations yet.</div>
+              <Kit mood="idle" size={26} />
+          <div>No favorite stations yet.</div>
               <div className="text-[11.5px] text-white/35">Tap the heart next to a station to keep it here.</div>
             </>
           ) : (

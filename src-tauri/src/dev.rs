@@ -101,6 +101,7 @@ fn random_token() -> String {
 /// Starts the endpoint (127.0.0.1, a random port, a token in a file only this user can read)
 /// and the watch for new dev servers.
 pub fn spawn(window: WebviewWindow) {
+    std::thread::spawn(refresh_cli);
     spawn_port_watch(window.clone());
     let Ok(listener) = TcpListener::bind("127.0.0.1:0") else { return };
     let Ok(port) = listener.local_addr().map(|a| a.port()) else { return };
@@ -648,16 +649,20 @@ fn on_path(path: &str, dir: &Path) -> bool {
     path.split(';').any(|p| p.trim().trim_end_matches('\\').to_lowercase() == dir)
 }
 
-/// The command our hook entries run; also how they're recognised again.
+/// The command our hook entries run: the windowless twin of `notch hook` (no terminal flashing).
 fn hook_command() -> String {
-    format!("\"{}\" hook", cli_dir().join("notch.exe").display())
+    format!("\"{}\"", cli_dir().join("notch-hook.exe").display())
 }
+
+/// The `notch` command's files, copied from next to the island into `cli_dir()`.
+const CLI_FILES: &[&str] = &["notch.exe", "notch-hook.exe"];
 
 // PermissionRequest lets you allow or deny a tool from the island; the others report progress.
 const HOOK_EVENTS: &[&str] = &["UserPromptSubmit", "Notification", "Stop", "PermissionRequest"];
 
+/// Ours now (notch-hook.exe) or from before it (notch.exe hook), so old entries get replaced.
 fn is_ours(entry: &serde_json::Value) -> bool {
-    entry["hooks"].as_array().is_some_and(|hooks| hooks.iter().any(|h| h["command"].as_str().is_some_and(|c| c.contains(r"\linnotch\bin\notch.exe"))))
+    entry["hooks"].as_array().is_some_and(|hooks| hooks.iter().any(|h| h["command"].as_str().is_some_and(|c| c.contains(r"\linnotch\bin\notch"))))
 }
 
 #[tauri::command]
@@ -860,17 +865,12 @@ pub fn cleanup() {
     let _ = std::fs::remove_file(endpoint_file());
 }
 
-/// Copies `notch.exe` (built next to the island) into its own folder and puts that on the user's
-/// PATH. New terminals pick it up; open ones keep their old PATH.
+/// Copies `notch.exe` and `notch-hook.exe` (built next to the island) into their own folder and
+/// puts that on the user's PATH. New terminals pick it up; open ones keep their old PATH.
 #[tauri::command]
 pub fn install_cli() -> Result<(), String> {
-    let source = std::env::current_exe().map_err(|e| e.to_string())?.with_file_name("notch.exe");
-    if !source.is_file() {
-        return Err("notch.exe isn't next to linnotch.exe (build it with `cargo build --bin notch`).".into());
-    }
+    copy_cli()?;
     let dir = cli_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    std::fs::copy(&source, dir.join("notch.exe")).map_err(|e| format!("couldn't copy notch.exe: {e}"))?;
     let (path, kind) = user_path();
     if !on_path(&path, &dir) {
         let joined = if path.trim().is_empty() { dir.display().to_string() } else { format!("{};{}", path.trim_end_matches(';'), dir.display()) };
@@ -879,11 +879,38 @@ pub fn install_cli() -> Result<(), String> {
     Ok(())
 }
 
+fn copy_cli() -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let dir = cli_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    for name in CLI_FILES {
+        let source = exe.with_file_name(name);
+        if !source.is_file() {
+            return Err(format!("{name} isn't next to linnotch.exe (build it with `cargo build --bin notch --bin notch-hook`)."));
+        }
+        std::fs::copy(&source, dir.join(name)).map_err(|e| format!("couldn't copy {name}: {e}"))?;
+    }
+    Ok(())
+}
+
+/// After an update: the copied `notch` files are the old version and Claude's hooks may still
+/// run the old console notch.exe (which flashed a terminal). Refresh both, if they were set up.
+fn refresh_cli() {
+    if !cli_dir().join("notch.exe").is_file() {
+        return;
+    }
+    // A `notch` command running right now keeps notch.exe locked; next start tries again.
+    let _ = copy_cli();
+    if dev_setup().claude {
+        let _ = connect_claude(true);
+    }
+}
+
 /// Adds (or removes) the island's hooks in ~/.claude/settings.json, leaving everything else as it
 /// was. The file is backed up once, before the first change.
 #[tauri::command]
 pub fn connect_claude(on: bool) -> Result<(), String> {
-    if on && !cli_dir().join("notch.exe").is_file() {
+    if on && !cli_dir().join("notch-hook.exe").is_file() {
         return Err("Set up the notch command first.".into());
     }
     let file = claude_settings();
@@ -1017,5 +1044,19 @@ Content-Length: {}
         assert_eq!(set_hooks(&mut s, false, cmd), Some(true));
         assert_eq!(s, serde_json::json!({ "model": "opus", "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "say done" }] }] } }));
         assert_eq!(set_hooks(&mut serde_json::json!([1]), true, cmd), None);
+    }
+
+    #[test]
+    fn old_console_hooks_are_swapped_for_the_windowless_one() {
+        let old = r#""C:\Users\me\AppData\Local\linnotch\bin\notch.exe" hook"#;
+        let new = r#""C:\Users\me\AppData\Local\linnotch\bin\notch-hook.exe""#;
+        let mut s = serde_json::json!({});
+        set_hooks(&mut s, true, old);
+        assert_eq!(set_hooks(&mut s, true, new), Some(true));
+        for event in HOOK_EVENTS {
+            let list = s["hooks"][event].as_array().unwrap();
+            assert_eq!(list.len(), 1, "{event}: the old entry is replaced, not kept next to the new one");
+            assert_eq!(list[0]["hooks"][0]["command"], new);
+        }
     }
 }

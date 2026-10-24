@@ -12,7 +12,7 @@ body:
     attributes:
       label: linnotch version
       description: The first line of the tray icon's menu.
-      placeholder: 0.1.0-alpha.3
+      placeholder: 0.1.0-alpha.4
     validations:
       required: true
   - type: dropdown

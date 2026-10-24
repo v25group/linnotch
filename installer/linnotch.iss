@@ -3,10 +3,10 @@
 ; can start linnotch at sign-in, and installs WebView2 if it's missing.
 
 #ifndef AppVersion
-  #define AppVersion "0.1.0-alpha.3"
+  #define AppVersion "0.1.0-alpha.4"
 #endif
 #ifndef FileVersion
-  #define FileVersion "0.1.0.3"
+  #define FileVersion "0.1.0.4"
 #endif
 #define AppName "linnotch"
 #define AppExe "linnotch.exe"
@@ -64,6 +64,8 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Source: "{#Bin}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 ; The `notch` command for the Developer tab (its Set up button puts it on PATH).
 Source: "{#Bin}\notch.exe"; DestDir: "{app}"; Flags: ignoreversion
+; What Claude Code's hooks run: `notch hook` without a console window (no terminal flashing).
+Source: "{#Bin}\notch-hook.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 
 [Icons]

@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Icon } from "../../components/icons";
 import { AppLogo, ago, useNow, type Note } from "../../island/system";
 import { useTip } from "../../components/tooltip";
+import { Kit } from "../../island/kit";
 
 export type StoredNote = Note & { at: number };
 
@@ -47,6 +48,7 @@ export function NotificationsView({ notes, onRemove, onClear }: { notes: StoredN
       </div>
       {notes.length === 0 ? (
         <div className="flex h-24 flex-col items-center justify-center gap-1 text-center text-[12.5px] text-white/50">
+          <Kit mood="idle" size={26} />
           <div>No notifications yet.</div>
           <div className="text-[11.5px] text-white/35">Messages from WhatsApp, Teams, mail and others collect here.</div>
         </div>

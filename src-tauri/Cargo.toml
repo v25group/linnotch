@@ -1,6 +1,6 @@
 [package]
 name = "linnotch"
-version = "0.1.0-alpha.3"
+version = "0.1.0-alpha.4"
 description = "linnotch: a Dynamic Island for Windows"
 authors = ["V25Group (Venticinque Aeyon Groupe)"]
 license = "MIT"

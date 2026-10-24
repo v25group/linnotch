@@ -15,7 +15,7 @@ $fileVersion = (($parts + @(0, 0, 0, 0))[0..3]) -join '.'
 Write-Host "Building linnotch $version ($fileVersion)" -ForegroundColor Cyan
 npm run tauri build -- --no-bundle
 if ($LASTEXITCODE) { throw "tauri build failed" }
-cargo build --release --manifest-path src-tauri\Cargo.toml --bin notch
+cargo build --release --manifest-path src-tauri\Cargo.toml --bin notch --bin notch-hook
 if ($LASTEXITCODE) { throw "building notch failed" }
 
 $iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") |

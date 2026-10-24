@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Icon, type IconName } from "../components/icons";
 import type { DevFlash } from "../features/developer/dev";
 import { ToolChip, type Tools } from "../features/timer/timer";
+import { Kit, type Mood } from "./kit";
 
 export type Battery = { percent: number; plugged: boolean };
 type Volume = { percent: number; muted: boolean };
@@ -263,64 +264,63 @@ function Dot({ color }: { color: string }) {
 const pop = { initial: { opacity: 0, scale: 0.6 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.6 } };
 
 /** The resting notch: time and running tools on the left, status on the right. */
-export function Collapsed({ time, date, battery, privacy, event, tools, conversion, music, bars, extras, dev }: {
-  time: string; date: string; battery: Battery | null; privacy: Privacy; event: CalEvent | null; tools: Tools;
+/** Kit sleeps late at night when nothing's going on. */
+const isNight = (now: number) => ((h) => h >= 23 || h < 6)(new Date(now).getHours());
+
+/** The resting notch: Kit, plus a small chip only for what's going on right now (music bars, a
+    timer, a conversion, a task, an event within the hour). Battery only when low or charging; the
+    mic/camera dots always, since they're a privacy signal. Its width follows the content. */
+export function Collapsed({ ref, mood, accent, battery, privacy, event, tools, conversion, bars, dev }: {
+  ref?: React.Ref<HTMLDivElement>;
+  /** What Kit shows; "idle" turns sleepy at night. */
+  mood: Mood;
+  /** The song's colour, for Kit's headphones. */
+  accent?: string;
+  battery: Battery | null; privacy: Privacy; event: CalEvent | null; tools: Tools;
   conversion: { progress: number | null; color: string } | null;
-  /** While music plays: the track on the left (taking whatever room is left); bars, time and battery on the right, no date. */
-  music?: React.ReactNode; bars?: React.ReactNode;
-  /** Weather (and sunrise/sunset when it's close), shown when no music plays. */
-  extras?: React.ReactNode;
+  /** Level bars while music plays. */
+  bars?: React.ReactNode;
   /** A running `notch` task or an agent waiting for you (src/features/developer/dev.tsx). */
   dev?: React.ReactNode;
 }) {
-  const now = Date.now();
+  const now = useNow(60_000);
   const soon = event && event.start - now <= 60 * 60_000 ? event : null;
+  const charging = !!battery?.plugged && battery.percent < 100;
+  const low = !!battery && !battery.plugged && battery.percent <= 20;
   return (
-    <div className="flex h-8.5 items-center justify-between gap-3 px-4 text-[12.5px] font-medium tabular-nums">
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        {music ?? (
-          <span className="flex shrink-0 items-center gap-2.5">
-            <span className="font-semibold">{time}</span>
-            <span className="h-3 w-px bg-white/25" />
-            <span className="font-semibold tracking-wide">{date}</span>
-          </span>
+    <div ref={ref} className="mx-auto flex h-8.5 w-max min-w-22 items-center justify-center gap-2.5 px-3.5 text-[12.5px] font-medium whitespace-nowrap tabular-nums">
+      <Kit mood={mood === "idle" && isNight(now) ? "sleep" : low ? "worried" : mood} accent={accent} />
+      {bars}
+      <ToolChip tools={tools} />
+      <AnimatePresence>
+        {conversion && (
+          <motion.span key="conversion" {...pop} className="flex items-center gap-1.5" style={{ color: conversion.color }}>
+            <Ring progress={conversion.progress ?? 0} color={conversion.color} size={14} />
+            {conversion.progress === null ? "…" : `${Math.round(conversion.progress * 100)}%`}
+          </motion.span>
         )}
-        <ToolChip tools={tools} />
-        <AnimatePresence>
-          {conversion && (
-            <motion.span key="conversion" {...pop} className="flex items-center gap-1.5" style={{ color: conversion.color }}>
-              <Ring progress={conversion.progress ?? 0} color={conversion.color} size={14} />
-              {conversion.progress === null ? "…" : `${Math.round(conversion.progress * 100)}%`}
-            </motion.span>
-          )}
-        </AnimatePresence>
-        {dev}
-      </div>
-      <div className="flex shrink-0 items-center gap-3">
-        <AnimatePresence>
-          {(privacy.camera.length > 0 || privacy.mic.length > 0) && (
-            <motion.span key="privacy" {...pop} className="flex items-center gap-1">
-              {privacy.camera.length > 0 && <Dot color={COLOR.camera} />}
-              {privacy.mic.length > 0 && <Dot color={COLOR.mic} />}
-            </motion.span>
-          )}
-          {soon && (
-            <motion.span key="event" {...pop} className="flex min-w-0 items-center gap-1.5" style={{ color: COLOR.event }}>
-              <Icon name="calendar" size={14} />
-              <span className="truncate">{untilText(soon.start, now)}</span>
-            </motion.span>
-          )}
-        </AnimatePresence>
-        {bars}
-        {music && <span className="shrink-0">{time}</span>}
-        {!music && extras}
-        {battery && (
-          <div className="flex items-center gap-1.5">
+      </AnimatePresence>
+      {dev}
+      <AnimatePresence>
+        {(privacy.camera.length > 0 || privacy.mic.length > 0) && (
+          <motion.span key="privacy" {...pop} className="flex items-center gap-1">
+            {privacy.camera.length > 0 && <Dot color={COLOR.camera} />}
+            {privacy.mic.length > 0 && <Dot color={COLOR.mic} />}
+          </motion.span>
+        )}
+        {soon && (
+          <motion.span key="event" {...pop} className="flex items-center gap-1.5" style={{ color: COLOR.event }}>
+            <Icon name="calendar" size={14} />
+            {untilText(soon.start, now)}
+          </motion.span>
+        )}
+        {battery && (charging || low) && (
+          <motion.span key="battery" {...pop} className="flex items-center gap-1.5">
             <BatteryGauge battery={battery} />
-            <span style={{ color: battery.plugged || battery.percent <= 20 ? batteryColor(battery) : undefined }}>{battery.percent}%</span>
-          </div>
+            <span style={{ color: batteryColor(battery) }}>{battery.percent}%</span>
+          </motion.span>
         )}
-      </div>
+      </AnimatePresence>
     </div>
   );
 }

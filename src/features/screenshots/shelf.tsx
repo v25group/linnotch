@@ -8,6 +8,7 @@ import { motion } from "motion/react";
 import { Icon, type IconName } from "../../components/icons";
 import { ago, useNow } from "../../island/system";
 import { useTip } from "../../components/tooltip";
+import { Kit } from "../../island/kit";
 
 export type Shot = { path: string; at: number };
 
@@ -121,6 +122,7 @@ export function ShelfView({ shots }: { shots: Shot[] }) {
       </div>
       {shots.length === 0 ? (
         <div className="flex h-24 flex-col items-center justify-center gap-1 text-center text-[12.5px] text-white/50">
+          <Kit mood="idle" size={26} />
           <div>No screenshots yet.</div>
           <div className="text-[11.5px] text-white/35">Press Win+Shift+S or Win+PrtScn and they land here.</div>
         </div>

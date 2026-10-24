@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-alpha.4
+
+- **Meet Kit:** a little fox now lives in the resting notch. The notch shrinks to just Kit plus what matters right now (music bars, a running timer, mic/camera in use, low battery). Kit looks around, wanders, wags and yawns while idle, wears headphones when music plays, sleeps at night and looks worried when the battery is low. Kit also turns up in empty pages and in "Update completed".
+- **Developer:** Claude Code pop-ups and cards are centred and use the Claude logo; a running agent shows a "thinking" animation in Tasks.
+- **Fixed:** a terminal window flashed for a split second on every Claude Code hook. Hooks now run through a windowless `notch-hook.exe`, and existing hooks move over by themselves.
+- **Fixed:** Ctrl+C didn't stop commands started with `notch` (for example `notch npm run dev`).
+- **Shortcut:** Radio moved to Ctrl+Alt+F, because Ctrl+Alt+R was often taken by other apps.
+
 ## 0.1.0-alpha.3
 
 - **Fixed:** the island still hid on the bare desktop, with the taskbar focused, and for a while after windows came back. Windows' own "fullscreen app" signal reports those as busy, so linnotch now checks for itself: it hides only for a window that really fills the screen (fullscreen video, F11 browser, games) or a presentation.

@@ -8,7 +8,7 @@ export const SHORTCUTS = [
   { key: "B", action: "Previous song" },
   { key: "I", action: "Open / close island" },
   { key: "L", action: "Music library" },
-  { key: "R", action: "Radio" },
+  { key: "F", action: "Radio" },
   { key: "T", action: "Timer" },
   { key: "V", action: "Clipboard history" },
   { key: "S", action: "Screenshots" },

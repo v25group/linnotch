@@ -9,6 +9,7 @@ import { Icon, type IconName } from "../../components/icons";
 import { load, save } from "../../lib/storage";
 import { ShortcutsView } from "../shortcuts/shortcuts";
 import logo from "../../assets/linnotch.png";
+import { Kit } from "../../island/kit";
 
 type Update = { version: string; notes: string; size: number };
 type Status =
@@ -84,15 +85,12 @@ export function useUpdater(idle: () => boolean, onUpdated: (version: string) => 
 }
 export type Updater = ReturnType<typeof useUpdater>;
 
-/** "Update completed": centred like the download pop-up, the check drops in beside the title. */
+/** "Update completed": centred like the download pop-up, with Kit happy beside the title. */
 export function UpdateFlash({ version }: { version: string }) {
   return (
     <div className="flex h-15 flex-col items-center justify-center gap-0.5 px-5 text-center">
       <div className="flex items-center gap-1.5 text-[13.5px] font-semibold">
-        <motion.span className="grid place-items-center text-[#4fd18b]"
-          initial={{ y: -12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 400, damping: 18 }}>
-          <Icon name="check" size={16} />
-        </motion.span>
+        <Kit mood="happy" size={18} />
         Update completed
       </div>
       <div className="max-w-full truncate text-[11.5px] text-white/55">linnotch {version} is ready</div>

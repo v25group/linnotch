@@ -112,32 +112,6 @@ export function useWeather() {
 
 export type Weather = ReturnType<typeof useWeather>;
 
-/** The next sunrise or sunset after `now`. */
-export function nextSun(f: Forecast, now = Date.now()) {
-  const events = [...f.sunrise.map((at) => ({ kind: "sunrise" as const, at })), ...f.sunset.map((at) => ({ kind: "sunset" as const, at }))];
-  return events.filter((e) => e.at > now).sort((a, b) => a.at - b.at)[0] ?? null;
-}
-
-/** For the resting notch: the weather, plus sunrise or sunset once it's less than an hour away. */
-export function WeatherChips({ weather, now }: { weather: Weather; now: number }) {
-  const f = weather.forecast;
-  if (!f) return null;
-  const { icon } = describe(f.code, f.day);
-  const sun = nextSun(f, now);
-  const soon = sun && sun.at - now < 3600_000 ? Math.max(1, Math.round((sun.at - now) / 60_000)) : null;
-  return (
-    <>
-      {soon && sun && (
-        <span className="flex shrink-0 items-center gap-1.5 text-[#ffb340]">
-          <Icon name={sun.kind} size={14} />
-          {sun.kind === "sunset" ? "Sunset" : "Sunrise"} in {soon} min
-        </span>
-      )}
-      <span className="flex shrink-0 items-center gap-1.5 text-white/85"><Icon name={icon} size={15} />{f.temp}°</span>
-    </>
-  );
-}
-
 /** Weather part of the Today tab. */
 export function WeatherPanel({ weather }: { weather: Weather }) {
   const f = weather.forecast;

@@ -9,6 +9,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { Icon } from "../../components/icons";
 import { Bars, FALLBACK, artColor, type Media } from "./media";
 import { clockText } from "../../island/system";
+import { Kit } from "../../island/kit";
 import { load, save } from "../../lib/storage";
 
 export type Track = {
@@ -432,6 +433,7 @@ export function LibraryView({ library, local }: { library: Library; local: Local
         </div>
       ) : tracks && tracks.length === 0 ? (
         <div className="flex h-24 flex-col items-center justify-center gap-1 text-center text-[12.5px] text-white/50">
+          <Kit mood={library.error ? "worried" : "idle"} size={26} />
           <div>{library.error ?? "No songs found in this folder."}</div>
           <div className="text-[11.5px] text-white/35">MP3, M4A, FLAC, WAV, OGG and Opus files play here.</div>
         </div>

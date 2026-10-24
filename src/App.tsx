@@ -5,9 +5,10 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { AnimatePresence, motion } from "motion/react";
 import { Icon, type IconName } from "./components/icons";
 import { TooltipLayer, useTip } from "./components/tooltip";
-import { Bars, NowPlayingLabel, PlayerCard, TrackFlash, useMedia } from "./features/music/media";
+import { Bars, PlayerCard, TrackFlash, useMedia } from "./features/music/media";
 import { LibraryView, useLibrary, useLocalPlayer, type Track } from "./features/music/library";
 import { AboutView, UpdateFlash, useUpdater } from "./features/about/about";
+import { Kit } from "./island/kit";
 import { RadioView, useRadio } from "./features/music/radio";
 import { CONVERT, ConvertView, ISLAND_NOTES, ISLAND_PLAYER, OpenWithView, appAt, looksLikeFile, useOpenWith, withIslandPlayer } from "./features/files/openwith";
 import { COLOR, Collapsed, FlashView, NoteCard, chime, flashColor, useSystem, type Flash } from "./island/system";
@@ -15,7 +16,7 @@ import { TimerView, useTools, type Ding } from "./features/timer/timer";
 import { ClipboardView, useClipboard } from "./features/clipboard/clipboard";
 import { DownloadCard, DownloadFlash, useDownloads, type Download } from "./features/downloads/downloads";
 import { TodayView, useDnd } from "./features/today/toggles";
-import { WeatherChips, useWeather } from "./features/today/weather";
+import { useWeather } from "./features/today/weather";
 import { NotificationsView } from "./features/notifications/notifications";
 import { DevCard, DevChip, DevFlashView, DevView, useDev, useDevEnabled, useGitHub, useMeters } from "./features/developer/dev";
 import { NotesView } from "./features/notes/notes";
@@ -33,7 +34,11 @@ type Stage =
   | { kind: "done"; path: string; info: FileInfo; out: string; size: number }
   | { kind: "error"; message: string; path?: string; info?: FileInfo };
 
+// The resting notch fits its content (Kit plus what's going on); this is its height, and the
+// width popups and the drop hint start from.
 const COLLAPSED = { width: 406, height: 34 };
+// The resting pill is small, but the area that opens it on hover stays comfortably wide.
+const REST_HOVER_WIDTH = 180;
 const TRAY_GAP = 8;
 const TRAY_WIDTH = 488; // notch width + the row's 4px side padding
 // Panel widths per view; heights come from measuring the content.
@@ -61,19 +66,19 @@ function formatDuration(seconds: number) {
   return h ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
 }
 
-/** Height of the element the returned ref is attached to, kept up to date. */
-function useHeight(): [(el: HTMLElement | null) => void, number] {
-  const [height, setHeight] = useState(0);
+/** Height (or width) of the element the returned ref is attached to, kept up to date. */
+function useMeasured(side: "offsetHeight" | "offsetWidth" = "offsetHeight"): [(el: HTMLElement | null) => void, number] {
+  const [value, setValue] = useState(0);
   const ref = useCallback((el: HTMLElement | null) => {
     if (!el) return;
     // An element leaving the DOM reports 0; ignore it so the outgoing view can't shrink the pill.
-    const update = () => el.offsetHeight > 0 && setHeight(el.offsetHeight);
+    const update = () => el[side] > 0 && setValue(el[side]);
     const observer = new ResizeObserver(update);
     observer.observe(el);
     update();
     return () => observer.disconnect();
-  }, []);
-  return [ref, height];
+  }, [side]);
+  return [ref, value];
 }
 
 /** What `inspect` says about the file being dragged (its formats), cached per path for the session. */
@@ -98,18 +103,6 @@ function useInspect(path: string | null) {
   }, [path]);
   // A result for an earlier file never shows for this one.
   return info && info.path === path ? info.info : null;
-}
-
-function useClock() {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  return {
-    time: now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).toUpperCase(), // "11:32 PM"
-    date: now.toLocaleDateString([], { weekday: "long", day: "numeric" }).toUpperCase(), // "SATURDAY 24"
-  };
 }
 
 function Tile({ icon, color }: { icon: IconName; color: string }) {
@@ -407,9 +400,9 @@ export default function App() {
     if (!devTab.on && tab === "dev") setTab("today");
   }, [devTab.on, tab]);
   const meters = useMeters((hovered && tab === "dev") || dev.running.length > 0);
-  const [contentRef, contentHeight] = useHeight();
-  const [trayRef, trayHeight] = useHeight();
-  const clock = useClock();
+  const [contentRef, contentHeight] = useMeasured();
+  const [trayRef, trayHeight] = useMeasured();
+  const [restRef, restWidth] = useMeasured("offsetWidth");
 
   useEffect(() => {
     const unlisten = [
@@ -482,7 +475,7 @@ export default function App() {
   const view = resting ? (flash ? "flash" : "collapsed") : openWith ? "openwith" : dragging ? "convert" : showHeld ? "held" : stage.kind === "idle" ? "hint" : stage.kind;
   const size =
     view === "collapsed"
-      ? COLLAPSED
+      ? { width: restWidth || 76, height: COLLAPSED.height }
       : { width: WIDTH[view], height: contentHeight || COLLAPSED.height };
   const kind = "info" in stage && stage.info?.kind ? stage.info.kind : "none";
   const accent =
@@ -492,7 +485,7 @@ export default function App() {
   // The open hover view gets the floating dock underneath instead.
   const dock = view === "hint" && !dragging;
   const hitHeight = size.height + ((tray || dock) && trayHeight ? TRAY_GAP + trayHeight : 0);
-  const hitWidth = tray ? Math.max(size.width, TRAY_WIDTH) : size.width;
+  const hitWidth = tray ? Math.max(size.width, TRAY_WIDTH) : view === "collapsed" ? Math.max(size.width, REST_HOVER_WIDTH) : size.width;
   // While the cursor is on the open island, the area that catches it never shrinks: switching to
   // a shorter tab would otherwise pull the dock out from under the cursor and close the island.
   const peak = useRef({ width: 0, height: 0 });
@@ -540,11 +533,10 @@ export default function App() {
             exit={{ opacity: 0, filter: "blur(6px)", transition: { duration: 0.12 } }}
           >
             {view === "collapsed" && (
-              <Collapsed time={clock.time} date={clock.date} battery={battery} privacy={privacy} event={event} tools={tools} conversion={conversion}
-                music={playing ? <NowPlayingLabel player={player} /> : undefined}
+              <Collapsed ref={restRef} battery={battery} privacy={privacy} event={event} tools={tools} conversion={conversion}
+                // Kit concentrates on a running task, bobs to music, else just hangs out.
+                mood={dev.running.length ? "focus" : playing ? "music" : "idle"} accent={player.color}
                 bars={playing ? <Bars playing color={player.color} /> : undefined}
-                // A running task or Claude waiting takes the weather's place, so the notch never overflows.
-                extras={dev.running.length || dev.waiting.length ? undefined : <WeatherChips weather={weather} now={Date.now()} />}
                 dev={<DevChip dev={dev} meters={meters} />} />
             )}
 
@@ -584,7 +576,7 @@ export default function App() {
                       <PlayerCard player={player} />
                     ) : (
                       <div className="flex flex-col items-center gap-2 py-5 text-center">
-                        <span className="text-white/40"><Icon name="audio" size={28} /></span>
+                        <Kit mood="idle" size={30} />
                         <div className="text-[13px] font-medium">Nothing playing</div>
                         <div className="text-[11.5px] text-white/45">Play something in Spotify, a browser, your library or the radio.</div>
                         <button onClick={() => setTab("library")}

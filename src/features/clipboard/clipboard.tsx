@@ -8,6 +8,7 @@ import { Icon, type IconName } from "../../components/icons";
 import { ago, useNow } from "../../island/system";
 import { useTip } from "../../components/tooltip";
 import { smart } from "./smart";
+import { Kit } from "../../island/kit";
 
 export type Clip = {
   id: number; text: string | null; image: string | null; width: number; height: number; at: number;
@@ -136,6 +137,7 @@ export function ClipboardView({ clips }: { clips: Clip[] }) {
       </div>
       {clips.length === 0 ? (
         <div className="flex h-24 flex-col items-center justify-center gap-1 text-center text-[12.5px] text-white/50">
+          <Kit mood="idle" size={26} />
           <div>Nothing copied yet.</div>
           <div className="text-[11.5px] text-white/35">Copy text or an image and it shows up here.</div>
         </div>

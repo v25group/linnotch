@@ -147,17 +147,6 @@ export function Bars({ playing, color, height = 14 }: { playing: boolean; color:
   );
 }
 
-/** Resting notch while music plays: the art and title, the level bars go on the right. */
-export function NowPlayingLabel({ player }: { player: Player }) {
-  if (!player.media) return null;
-  return (
-    <span className="flex min-w-0 items-center gap-2">
-      <Art src={player.art} size={20} radius={5} />
-      <span className="truncate">{player.media.title}</span>
-    </span>
-  );
-}
-
 /** Text that slowly scrolls back and forth when it's too long for its box. */
 function Marquee({ text, className }: { text: string; className?: string }) {
   const box = useRef<HTMLDivElement>(null);
