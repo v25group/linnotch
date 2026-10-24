@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-alpha.3
+
+- **Fixed:** the island still hid on the bare desktop, with the taskbar focused, and for a while after windows came back. Windows' own "fullscreen app" signal reports those as busy, so linnotch now checks for itself: it hides only for a window that really fills the screen (fullscreen video, F11 browser, games) or a presentation.
+- Fullscreen on a second monitor no longer hides the island.
+- First version delivered by the updater: on alpha.2 it arrives by itself.
+
 ## 0.1.0-alpha.2
 
 - **Updates:** linnotch now updates itself. The new About tab checks GitHub for new versions and installs them, by itself by default, only while the island is closed and its player is quiet. You'll see "Update completed" when it's done. Every update is signed and checked before it runs. (Coming from alpha.1, install this version by hand once.)
