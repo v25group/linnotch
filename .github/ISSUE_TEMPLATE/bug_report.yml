@@ -1,0 +1,66 @@
+name: Bug report
+description: Something in linnotch doesn't work the way it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time! The more exact you are, the faster it gets fixed.
+        Found a security problem? Please report it privately instead: see SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: linnotch version
+      description: The first line of the tray icon's menu.
+      placeholder: 0.1.0-alpha.1
+    validations:
+      required: true
+  - type: dropdown
+    id: windows
+    attributes:
+      label: Windows version
+      options:
+        - Windows 11
+        - Windows 10
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part?
+      options:
+        - The notch / pop-ups
+        - Now playing / Library / Radio
+        - Today (weather, toggles)
+        - Timer
+        - Clipboard
+        - Notes
+        - Notifications
+        - Screenshots
+        - Drag and drop / Open with / Convert
+        - Developer tab
+        - Installer / uninstaller
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+      placeholder: |
+        1. I hovered over the notch while Spotify was playing
+        2. …
+        I expected … but …
+    validations:
+      required: true
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshot or recording
+      description: Drag images or a short video here. Please check they don't show anything private.
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Your screen setup (several monitors, scaling), apps involved, how often it happens…

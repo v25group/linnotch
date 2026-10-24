@@ -1,0 +1,39 @@
+{
+  "name": "linnotch",
+  "private": true,
+  "version": "0.1.0-alpha.1",
+  "description": "linnotch: a Dynamic Island for Windows",
+  "license": "MIT",
+  "author": "V25Group (Venticinque Aeyon Groupe) <https://www.v25group.com/>",
+  "homepage": "https://github.com/v25group/linnotch",
+  "repository": { "type": "git", "url": "https://github.com/v25group/linnotch.git" },
+  "bugs": { "url": "https://github.com/v25group/linnotch/issues" },
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "test": "tsc --noEmit && node scripts/smart.test.ts && node scripts/timeparse.test.ts && cargo test --manifest-path src-tauri/Cargo.toml"
+  },
+  "dependencies": {
+    "@crabnebula/tauri-plugin-drag": "^2.1.0",
+    "@hugeicons/core-free-icons": "^4.3.5",
+    "@hugeicons/react": "^1.1.10",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2.8.3",
+    "motion": "^14.5.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^6.0.2",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.3",
+    "vite": "^8.0.16"
+  }
+}

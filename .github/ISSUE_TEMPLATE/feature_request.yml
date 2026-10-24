@@ -1,0 +1,31 @@
+name: Idea or suggestion
+description: Something linnotch could do, or do better.
+labels: ["idea"]
+body:
+  - type: markdown
+    attributes:
+      value: Please check the open issues first; if your idea is there, a 👍 on it helps more than a new issue.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would it help you with?
+      description: The situation or annoyance, in your own words.
+      placeholder: When I'm in a video call I keep checking…
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: How you picture it working. Sketches and screenshots of other apps are welcome.
+    validations:
+      required: true
+  - type: dropdown
+    id: who
+    attributes:
+      label: Who is it for?
+      options:
+        - Everyone
+        - Developers
+        - Music / media
+        - Something else

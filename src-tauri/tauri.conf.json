@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "linnotch",
+  "version": "0.1.0",
+  "identifier": "com.linnotch.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "linnotch",
+        "width": 540,
+        "height": 420,
+        "transparent": true,
+        "decorations": false,
+        "shadow": false,
+        "resizable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false
+      }
+    ],
+    "security": {
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": []
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "publisher": "V25Group",
+    "copyright": "© 2026 Venticinque Aeyon Groupe (V25Group). MIT License.",
+    "category": "Utility",
+    "shortDescription": "A Dynamic Island for Windows",
+    "longDescription": "linnotch puts a Dynamic Island at the top of your screen: music, notifications, timers, clipboard, notes, and tools for developers.",
+    "homepage": "https://github.com/v25group/linnotch",
+    "license": "MIT",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

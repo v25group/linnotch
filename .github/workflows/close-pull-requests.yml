@@ -1,0 +1,26 @@
+# linnotch doesn't accept code contributions (see CONTRIBUTING.md). Every pull request opened by
+# someone else is closed right away with a friendly note pointing to issues instead.
+# pull_request_target runs this repo's own copy of the workflow (never the PR's code), and the job
+# only comments and closes, so it's safe for PRs from forks.
+name: Close pull requests
+
+on:
+  pull_request_target:
+    types: [opened, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  close:
+    # Your own PRs (as owner, organisation member or collaborator) stay open.
+    if: ${{ !contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment and close
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh pr close "$PR" --repo "$REPO" --comment "Thanks for taking the time! linnotch doesn't accept pull requests, so this one is closed automatically. If it fixes a bug or adds something useful, please open an issue describing it (https://github.com/$REPO/issues/new/choose): we'll build it and credit you. See CONTRIBUTING.md for more."

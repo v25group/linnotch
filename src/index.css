@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* The window is transparent; only the pill should paint. */
+html,
+body {
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+}
+
+/* Now-playing level bars. CSS rather than motion so they always run, even when their view
+   mounts inside an AnimatePresence that skips initial animations. */
+@keyframes bar-dance {
+  0% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+  100% { transform: scaleY(0.5); }
+}
