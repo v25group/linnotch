@@ -5,9 +5,7 @@
 //! window is shown, and click-through is done here instead of through Tauri.
 
 use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::Shell::{
-    QUNS_BUSY, QUNS_PRESENTATION_MODE, QUNS_RUNNING_D3D_FULL_SCREEN, SHQueryUserNotificationState,
-};
+use windows::Win32::UI::Shell::{QUNS_PRESENTATION_MODE, QUNS_RUNNING_D3D_FULL_SCREEN, SHQueryUserNotificationState};
 use windows::Win32::UI::WindowsAndMessaging::{
     GWL_EXSTYLE, GetWindowLongPtrW, SetWindowLongPtrW, WS_EX_APPWINDOW, WS_EX_LAYERED, WS_EX_TOOLWINDOW,
     WS_EX_TRANSPARENT,
@@ -47,23 +45,43 @@ pub fn foreground_window() -> isize {
     unsafe { windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow() }.0 as isize
 }
 
-/// True while a fullscreen game, video or presentation is in front.
+/// True while a fullscreen game, video or presentation is in front of the island's (primary) monitor.
+/// Windows' own QUNS_BUSY isn't used: it says "busy" for the bare desktop and a focused taskbar,
+/// and stays that way for a while after windows come back, which hid the island for no reason.
 pub fn fullscreen_app_running() -> bool {
-    // The desktop (Progman/WorkerW) covers the whole monitor, so Windows reports it as QUNS_BUSY.
-    if is_desktop(foreground_window()) {
-        return false;
-    }
-    matches!(
-        unsafe { SHQueryUserNotificationState() },
-        Ok(QUNS_BUSY | QUNS_RUNNING_D3D_FULL_SCREEN | QUNS_PRESENTATION_MODE)
-    )
+    matches!(unsafe { SHQueryUserNotificationState() }, Ok(QUNS_RUNNING_D3D_FULL_SCREEN | QUNS_PRESENTATION_MODE))
+        || foreground_covers_primary_monitor()
 }
 
-fn is_desktop(hwnd: isize) -> bool {
-    use windows::Win32::UI::WindowsAndMessaging::GetClassNameW;
-    let mut buf = [0u16; 16];
-    let n = unsafe { GetClassNameW(HWND(hwnd as *mut _), &mut buf) } as usize;
-    matches!(String::from_utf16_lossy(&buf[..n]).as_str(), "Progman" | "WorkerW")
+/// A borderless window (F11 browser, video player, borderless game) filling the primary monitor.
+/// Maximized windows don't count, even where they spill past the edges (auto-hide taskbar).
+fn foreground_covers_primary_monitor() -> bool {
+    use windows::Win32::Foundation::{POINT, RECT};
+    use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MonitorFromPoint, MonitorFromWindow};
+    use windows::Win32::UI::WindowsAndMessaging::{GetClassNameW, GetWindowRect, IsZoomed};
+    let h = HWND(foreground_window() as *mut _);
+    if h.0.is_null() || unsafe { IsZoomed(h) }.as_bool() {
+        return false;
+    }
+    let mut class = [0u16; 32];
+    let n = unsafe { GetClassNameW(h, &mut class) } as usize;
+    // The desktop and the taskbar are as big as the screen but are never "fullscreen apps".
+    if matches!(String::from_utf16_lossy(&class[..n]).as_str(), "Progman" | "WorkerW" | "Shell_TrayWnd" | "Shell_SecondaryTrayWnd") {
+        return false;
+    }
+    unsafe {
+        let primary = MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY);
+        if MonitorFromWindow(h, MONITOR_DEFAULTTOPRIMARY) != primary {
+            return false;
+        }
+        let mut info = MONITORINFO { cbSize: size_of::<MONITORINFO>() as u32, ..Default::default() };
+        let mut rect = RECT::default();
+        GetMonitorInfoW(primary, &mut info).as_bool() && GetWindowRect(h, &mut rect).is_ok() && covers(rect, info.rcMonitor)
+    }
+}
+
+fn covers(w: windows::Win32::Foundation::RECT, m: windows::Win32::Foundation::RECT) -> bool {
+    w.left <= m.left && w.top <= m.top && w.right >= m.right && w.bottom >= m.bottom
 }
 
 #[derive(Clone, Copy, PartialEq, serde::Serialize)]
@@ -219,5 +237,22 @@ pub fn set_start_with_windows(on: bool) {
         }
     } else {
         let _ = key.delete_value("linnotch");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows::Win32::Foundation::RECT;
+
+    #[test]
+    fn only_a_window_filling_the_monitor_counts_as_fullscreen() {
+        let r = |left, top, right, bottom| RECT { left, top, right, bottom };
+        let monitor = r(0, 0, 1920, 1080);
+        assert!(covers(r(0, 0, 1920, 1080), monitor), "borderless fullscreen");
+        assert!(covers(r(-1, -1, 1921, 1081), monitor), "a pixel past the edges");
+        assert!(!covers(r(-8, -8, 1928, 1040), monitor), "maximized above the taskbar");
+        assert!(!covers(r(100, 100, 900, 700), monitor), "a normal window");
+        assert!(!covers(r(1920, 0, 3840, 1080), monitor), "fullscreen on another monitor");
     }
 }
