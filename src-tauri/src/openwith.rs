@@ -13,7 +13,7 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoTaskMemFree, IDataObject};
 use windows::Win32::UI::Shell::{
     ASSOC_FILTER_RECOMMENDED, ASSOCF_INIT_BYEXENAME, ASSOCSTR_FRIENDLYAPPNAME, AssocQueryStringW, FOLDERID_AppsFolder,
-    IShellItemImageFactory, KF_FLAG_DEFAULT, SHCreateItemInKnownFolder, SIIGBF_ICONONLY, BHID_DataObject, IAssocHandler, IShellItem, SHAssocEnumHandlers, SHCreateItemFromParsingName,
+    IShellItemImageFactory, KF_FLAG_DEFAULT, SHCreateItemInKnownFolder, SIIGBF_ICONONLY, SIIGBF_RESIZETOFIT, BHID_DataObject, IAssocHandler, IShellItem, SHAssocEnumHandlers, SHCreateItemFromParsingName,
     SHDefExtractIconW, SHLoadIndirectString,
 };
 use windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, GetIconInfo, HICON, ICONINFO};
@@ -29,7 +29,7 @@ pub struct App {
 }
 
 /// Shell objects want a single-threaded apartment; run `f` on a fresh thread that has one.
-fn sta<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
+pub(crate) fn sta<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
     std::thread::spawn(move || {
         let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
         f()
@@ -65,7 +65,7 @@ fn handler_name(h: &IAssocHandler) -> String {
 
 /// What to show for a handler. Some apps register no display name and Windows hands back their
 /// exe path; show the exe's own description instead ("Claude", not "C:\Users\...\claude.exe").
-fn display_name(ui_name: &str, exe: &str) -> String {
+pub(crate) fn display_name(ui_name: &str, exe: &str) -> String {
     if !ui_name.contains('\\') {
         return ui_name.to_string();
     }
@@ -83,7 +83,7 @@ fn display_name(ui_name: &str, exe: &str) -> String {
 }
 
 /// The icon at `location` ("file,index" style, or a "@{package?ms-resource}" string for Store apps).
-fn icon(location: &str, index: i32) -> Option<String> {
+pub(crate) fn icon(location: &str, index: i32) -> Option<String> {
     if location.starts_with('@') {
         let mut buf = [0u16; 1024];
         unsafe { SHLoadIndirectString(&HSTRING::from(location), &mut buf, None) }.ok()?;
@@ -116,6 +116,21 @@ pub(crate) fn app_icon(aumid: &str) -> Option<String> {
     sta(move || unsafe {
         let item: IShellItemImageFactory = SHCreateItemInKnownFolder(&FOLDERID_AppsFolder, KF_FLAG_DEFAULT, &HSTRING::from(aumid)).ok()?;
         let bitmap = item.GetImage(SIZE { cx: 64, cy: 64 }, SIIGBF_ICONONLY).ok()?;
+        let png = bitmap_png(bitmap, true);
+        let _ = DeleteObject(bitmap.into());
+        png
+    })
+}
+
+/// The icon Explorer shows for a file, folder, app or shortcut, as a PNG data: URL. With `preview`,
+/// its thumbnail instead where Windows has one (a photo, a video frame, a song's album art),
+/// falling back to the icon.
+pub(crate) fn path_image(path: &str, preview: bool) -> Option<String> {
+    let path = path.to_string();
+    sta(move || unsafe {
+        let item: IShellItemImageFactory = SHCreateItemFromParsingName(&HSTRING::from(path), None).ok()?;
+        let (size, flags) = if preview { (128, SIIGBF_RESIZETOFIT) } else { (64, SIIGBF_ICONONLY) };
+        let bitmap = item.GetImage(SIZE { cx: size, cy: size }, flags).ok()?;
         let png = bitmap_png(bitmap, true);
         let _ = DeleteObject(bitmap.into());
         png

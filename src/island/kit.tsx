@@ -2,8 +2,10 @@
 // Drawn small and simple on purpose: at ~22px a detailed fox turns to mush, so it's a round head,
 // pointy ears, a pale muzzle, eyes and a tail. Kit's mood says what's going on instead of text,
 // and when nothing is, Kit keeps busy with little things (looking around, a wander, a yawn...).
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
+import { listen } from "@tauri-apps/api/event";
+import { load, save } from "../lib/storage";
 
 export type Mood = "idle" | "music" | "focus" | "sleep" | "worried" | "happy";
 type Activity = "rest" | "look" | "wander" | "wag" | "yawn" | "hop" | "tilt";
@@ -116,7 +118,16 @@ function bodyMotion(mood: Mood, activity: Activity) {
   }
 }
 
-export function Kit({ mood, size = 22, accent = "#ff6b9a" }: { mood: Mood; size?: number; accent?: string }) {
+/** The chosen look (About → Look), shared from App so every Kit on screen follows it. */
+export const SkinContext = createContext<Skin>("kit");
+
+/** Kit, drawn in the chosen look: the fox, or just its eyes. Use this everywhere; `Fox` and
+    `KitEyes` are for showing one look on purpose (the Look picker). */
+export function Kit(props: { mood: Mood; size?: number; accent?: string }) {
+  return useContext(SkinContext) === "eyes" ? <KitEyes {...props} /> : <Fox {...props} />;
+}
+
+export function Fox({ mood, size = 22, accent = "#ff6b9a" }: { mood: Mood; size?: number; accent?: string }) {
   const still = useReducedMotion();
   const [activity, nonce] = useActivity(mood === "idle" && !still);
   const blink = useBlink(mood === "idle" || mood === "worried");
@@ -159,6 +170,125 @@ export function Kit({ mood, size = 22, accent = "#ff6b9a" }: { mood: Mood; size?
         {mood === "music" && <Headphones color={accent} />}
       </motion.svg>
       {!still && mood === "sleep" && <Floater>z</Floater>}
+      {!still && mood === "music" && <><Floater>♪</Floater><Floater delay={1.2}>♫</Floater></>}
+    </span>
+  );
+}
+
+
+/** How the resting notch draws its character. Kit is linnotch's own; more skins can join later. */
+export type Skin = "kit" | "eyes";
+const SKIN_KEY = "island.skin";
+
+export function useSkin() {
+  const [skin, setSkin] = useState<Skin>(() => (load(SKIN_KEY) === "eyes" ? "eyes" : "kit"));
+  const choose = (s: Skin) => (save(SKIN_KEY, s), setSkin(s));
+  return { skin, choose };
+}
+
+const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+const glow = (color: string) => `drop-shadow(0 0 2.5px ${color}) drop-shadow(0 0 7px rgb(120 140 255 / 0.55))`;
+
+/** Flips on for `ms`, restarting the clock if it's flipped again meanwhile. */
+function usePulse(ms: number): [boolean, () => void] {
+  const [on, setOn] = useState(false);
+  const timer = useRef(0);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  return [on, () => {
+    setOn(true);
+    clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setOn(false), ms);
+  }];
+}
+
+type Shape = "open" | "happy" | "shut" | "narrow" | "dizzy";
+
+function Eye({ shape, side, worried, wink, scale }: { shape: Shape; side: -1 | 1; worried: boolean; wink: boolean; scale: number }) {
+  if (shape === "happy") // ^ ^
+    return <motion.span className="block h-[7px] w-2.5 rounded-t-full border-x-[2.5px] border-t-[2.5px] border-white" initial={{ y: 2, opacity: 0 }} animate={{ y: 0, opacity: 1 }} />;
+  if (shape === "dizzy") // @ @, spinning
+    return <motion.span className="block size-3 rounded-full border-[2.5px] border-white border-t-transparent"
+      animate={{ rotate: side * 360 }} transition={{ repeat: Infinity, duration: 0.6, ease: "linear" }} />;
+  const scaleY = shape === "shut" || wink ? 0.14 : shape === "narrow" ? 0.5 : 1;
+  return (
+    <motion.span className="block h-3.5 w-2 rounded-full bg-white"
+      animate={{ scaleY, scale, rotate: worried ? side * -16 : 0 }}
+      transition={{ duration: scaleY < 1 ? 0.08 : 0.16, scale: { type: "spring", stiffness: 380, damping: 18 } }} />
+  );
+}
+
+/** The eyes skin: Kit's eyes alone, glowing in the notch. They follow the cursor anywhere on screen,
+    blink, squint at a click, wink at a copy, look down while you type, go big when the cursor
+    comes near and happy right under it, get dizzy when the mouse is shaken, doze off when you're
+    away and hop when you're back. Moods match Kit's: ^ ^ to music, narrowed for a task, asleep
+    at night, slanted on low battery. Rust sends "cursor", "click", "typing" and "away". */
+export function KitEyes({ mood, size = 22, accent = "#8cd2ff" }: { mood: Mood; size?: number; accent?: string }) {
+  const still = useReducedMotion();
+  const live = !still && mood !== "sleep";
+  const [look, setLook] = useState({ x: 0, y: 0 });
+  const [near, setNear] = useState<"far" | "near" | "under">("far");
+  const [typing, setTyping] = useState(false);
+  const [away, setAway] = useState(false);
+  const [squint, poke] = usePulse(260);
+  const [wink, winkNow] = usePulse(380);
+  const [dizzy, dizzyNow] = usePulse(1400);
+  const [welcome, welcomeNow] = usePulse(1200);
+  const blink = useBlink(live && !away);
+  const shake = useRef({ last: 0, dir: 0, flips: [] as number[] });
+  // The listeners are set up once; they reach the latest pulses through this.
+  const react = useRef({ poke, winkNow, dizzyNow, welcomeNow });
+  react.current = { poke, winkNow, dizzyNow, welcomeNow };
+
+  useEffect(() => {
+    if (!live) return setLook({ x: 0, y: 0 });
+    const offs = [
+      listen<[number, number]>("cursor", ({ payload: [dx, dy] }) => {
+        setLook({ x: clamp(dx / 260) * 3.5, y: clamp(dy / 160) * 2.5 });
+        setNear(Math.abs(dx) < 50 && dy < 22 ? "under" : Math.hypot(dx, dy) < 160 ? "near" : "far");
+        // A shake: the cursor turning back and forth 4+ times in under 0.7 s.
+        const s = shake.current, step = dx - s.last, dir = Math.sign(step);
+        s.last = dx;
+        if (Math.abs(step) < 25 || dir === s.dir) return;
+        s.dir = dir;
+        const now = Date.now();
+        s.flips = [...s.flips.filter((t) => now - t < 700), now];
+        if (s.flips.length >= 4) {
+          s.flips = [];
+          react.current.dizzyNow();
+        }
+      }),
+      listen("click", () => react.current.poke()),
+      listen("clipboard", () => react.current.winkNow()),
+      listen<boolean>("typing", (e) => setTyping(e.payload)),
+      listen<boolean>("away", (e) => {
+        setAway(e.payload);
+        if (!e.payload) react.current.welcomeNow();
+      }),
+    ];
+    return () => offs.forEach((p) => p.then((off) => off()));
+  }, [live]);
+
+  const asleep = mood === "sleep" || away;
+  const shape: Shape = asleep || blink ? "shut" : dizzy ? "dizzy"
+    : mood === "music" || mood === "happy" || welcome || near === "under" ? "happy"
+    : mood === "focus" || typing || squint ? "narrow" : "open";
+  const gaze = typing || mood === "focus" ? { x: 0, y: 2 } : dizzy || asleep ? { x: 0, y: 0 } : look;
+  const body = still ? {}
+    : mood === "music" ? { animate: { rotate: [-6, 6, -6], y: [0, -1, 0] }, transition: { duration: 0.9, repeat: Infinity, ease: "easeInOut" as const } }
+    : mood === "happy" || welcome ? { animate: { rotate: 0, y: [0, -3, 0, -1.5, 0] }, transition: { duration: 0.8 } }
+    : { animate: { rotate: 0, y: 0 } };
+  const eye = { shape, worried: mood === "worried", scale: near === "near" && shape === "open" ? 1.2 : mood === "worried" ? 0.85 : 1 };
+
+  return (
+    // Drawn for the notch (size 22) and scaled for bigger spots like empty pages.
+    <span className="relative flex h-5 shrink-0 items-center px-1.5" style={{ zoom: size / 22 }} role="img" aria-label={`Kit's eyes, ${asleep ? "asleep" : mood}`}>
+      <motion.span className="flex items-center" style={{ filter: glow(mood === "music" ? accent : "rgb(140 210 255 / 0.95)") }} {...body}>
+        <motion.span className="flex items-center gap-2" animate={gaze} transition={{ type: "spring", stiffness: 260, damping: 22 }}>
+          <Eye side={-1} wink={wink} {...eye} />
+          <Eye side={1} wink={false} {...eye} />
+        </motion.span>
+      </motion.span>
+      {!still && asleep && <Floater>z</Floater>}
       {!still && mood === "music" && <><Floater>♪</Floater><Floater delay={1.2}>♫</Floater></>}
     </span>
   );

@@ -1908,7 +1908,7 @@ dependencies = [
 
 [[package]]
 name = "linnotch"
-version = "0.1.0-alpha.4"
+version = "0.1.0-beta.1"
 dependencies = [
  "arboard",
  "base64 0.22.1",

@@ -1,6 +1,10 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Add01Icon,
+  BookOpen02Icon,
+  DashboardSquareSettingIcon,
+  Pin02Icon,
+  Settings02Icon,
   Note01Icon,
   SourceCodeIcon,
   GitPullRequestIcon,
@@ -167,6 +171,10 @@ const icons = {
   failed: CancelCircleIcon,
   agent: AiChat02Icon,
   note: Note01Icon,
+  bookshelf: BookOpen02Icon,
+  pin: Pin02Icon,
+  tabs: DashboardSquareSettingIcon,
+  settings: Settings02Icon,
 };
 
 export type IconName = keyof typeof icons;

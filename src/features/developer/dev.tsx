@@ -38,10 +38,18 @@ export type DevFlash = {
 
 const DEV_KEY = "island.devTab";
 
-/** Whether the Developer tab is on (Today tab's toggle). Off for people who never need it: no
-    tab, no GitHub polling, no dev-server pop-ups. `notch` still reports, since that's asked for. */
+/** Whether the Developer tab is on (Settings → Tabs). Off for people who never need it: no
+    tab, no GitHub polling, no dev-server pop-ups. `notch` still reports, since that's asked for.
+    New installs start with it off; an update keeps it on for people who already had it
+    (a last-run version is saved, see src/features/settings/settings.tsx). */
 export function useDevEnabled() {
-  const [on, setOn] = useState(() => load(DEV_KEY) !== "0");
+  const [on, setOn] = useState(() => {
+    const saved = load(DEV_KEY);
+    if (saved) return saved === "1";
+    const on = !!load("island.lastVersion");
+    save(DEV_KEY, on ? "1" : "0");
+    return on;
+  });
   const toggle = useCallback(() => setOn((v) => (save(DEV_KEY, v ? "0" : "1"), !v)), []);
   return { on, toggle };
 }

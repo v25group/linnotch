@@ -59,9 +59,7 @@ function Toggle({ icon, label, on, color, available = true, onClick }: {
   );
 }
 
-export function TodayView({ weather, dnd, onDnd, devOn, onDev }: {
-  weather: Weather; dnd: boolean; onDnd: () => void; devOn: boolean; onDev: () => void;
-}) {
+export function TodayView({ weather, dnd, onDnd }: { weather: Weather; dnd: boolean; onDnd: () => void }) {
   const { state: s, set, error } = useSystemToggles(true);
   const row = useRef<HTMLDivElement>(null);
   return (
@@ -80,7 +78,6 @@ export function TodayView({ weather, dnd, onDnd, devOn, onDev }: {
         <Toggle icon="moon" label="Dark mode" color="#8e8e93" on={!!s?.dark} available={s?.dark != null} onClick={() => set("dark", !s?.dark)} />
         <Toggle icon={s?.mic_muted ? "micOff" : "mic"} label="Mute mic" color="#ff453a" on={!!s?.mic_muted} available={s?.mic_muted != null}
           onClick={() => set("mic", !s?.mic_muted)} />
-        <Toggle icon="code" label="Developer" color="#30b0c7" on={devOn} onClick={onDev} />
       </div>
       <div className="flex min-h-4 items-center justify-between gap-2 px-1 text-[11px] text-white/40">
         <span className="truncate">{error ?? (dnd ? "Focus is on: notification pop-ups are silenced." : "")}</span>

@@ -8,9 +8,13 @@ Set-Location $root
 $version = (Get-Content package.json -Raw | ConvertFrom-Json).version          # 0.1.0-alpha.1
 $cargo = Select-String -Path src-tauri\Cargo.toml -Pattern '^version = "(.+)"' | Select-Object -First 1
 if ($cargo.Matches[0].Groups[1].Value -ne $version) { throw "package.json ($version) and Cargo.toml ($($cargo.Matches[0].Groups[1].Value)) versions differ" }
-# Windows file versions are four numbers: 0.1.0-alpha.1 -> 0.1.0.1
-$parts = $version -split '[.-]' | Where-Object { $_ -match '^\d+$' }
-$fileVersion = (($parts + @(0, 0, 0, 0))[0..3]) -join '.'
+# Windows file versions are four numbers, and must keep rising from stage to stage:
+# 0.1.0-alpha.4 -> 0.1.0.4, 0.1.0-beta.1 -> 0.1.0.101, 0.1.0-rc.2 -> 0.1.0.202, 0.1.0 -> 0.1.0.999
+$core = ($version -split '-')[0]
+$build = if ($version -match '-(alpha|beta|rc)\.(\d+)$') { @{ alpha = 0; beta = 100; rc = 200 }[$Matches[1]] + [int]$Matches[2] }
+  elseif ($version -match '-') { throw "Unknown pre-release in $version (use alpha.N, beta.N or rc.N)" }
+  else { 999 }
+$fileVersion = "$core.$build"
 
 Write-Host "Building linnotch $version ($fileVersion)" -ForegroundColor Cyan
 npm run tauri build -- --no-bundle

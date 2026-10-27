@@ -1,22 +1,30 @@
-// Timer tab: a countdown (presets or any length you type, with a label), Pomodoro, a stopwatch with
-// laps, and alarms at a time of day. Everything runs on wall-clock timestamps and is kept in
+// Timer tab: a countdown (presets or any length you type, with a label), Pomodoro, a focus session
+// (only the apps you pick may be in front, src-tauri/src/focus.rs), a stopwatch with laps, and
+// alarms at a time of day. Everything runs on wall-clock timestamps and is kept in
 // localStorage, so it survives the island restarting.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
 import { Icon, type IconName } from "../../components/icons";
 import { load, save } from "../../lib/storage";
 import { COLOR, Ring, clockText, useNow } from "../../island/system";
 import { useTip } from "../../components/tooltip";
 import { MIN, parseAlarm, parseDuration } from "./timeparse";
+import { Kit } from "../../island/kit";
 
 type Countdown = { total: number; end: number; left: number | null }; // `left` is set while paused
 export type Tool =
   | ({ mode: "timer"; label: string } & Countdown)
   | ({ mode: "pomodoro"; phase: "focus" | "break" | "long"; round: number } & Countdown)
+  | ({ mode: "focus"; apps: FocusApp[] } & Countdown)
   | { mode: "stopwatch"; start: number; elapsed: number | null; laps: number[] }; // `elapsed` while paused; laps: total ms at each lap
 export type Alarm = { id: number; at: number; label: string };
-/** What the island says when something ends. */
-export type Ding = { title: string; subtitle: string };
+/** What the island says when something ends. `ring`: a timer or alarm, which pauses the music while
+    it rings (a Pomodoro moving on doesn't). */
+export type Ding = { title: string; subtitle: string; alarm?: boolean; ring?: boolean };
+type FocusApp = { exe: string; name: string; icon?: string | null };
 
 const TOOL_KEY = "island.timer";
 const ALARMS_KEY = "island.alarms";
@@ -42,8 +50,9 @@ const lengthText = (ms: number) => {
 const atText = (at: number) => new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).toUpperCase();
 const lapText = (ms: number) => `${clockText(ms)}.${Math.floor((ms % 1000) / 100)}`;
 
-/** The running timer/Pomodoro/stopwatch and the alarms. `onDing` fires when one ends. */
-export function useTools(onDing: (d: Ding) => void) {
+/** The running timer/Pomodoro/focus/stopwatch and the alarms. `onDing` fires when one ends,
+    `onBlocked` with an app's name when a focus session minimised it. */
+export function useTools(onDing: (d: Ding) => void, onBlocked: (app: string) => void) {
   const [tool, setTool] = useState<Tool | null>(() => {
     const t = stored<Tool | null>(TOOL_KEY, null);
     // A countdown that ran out while the island was closed is simply gone.
@@ -53,11 +62,13 @@ export function useTools(onDing: (d: Ding) => void) {
   const now = useNow(tool || alarms.length ? 250 : null);
   const ding = useRef(onDing);
   ding.current = onDing;
+  const blocked = useRef(onBlocked);
+  blocked.current = onBlocked;
 
   useEffect(() => save(TOOL_KEY, JSON.stringify(tool)), [tool]);
   useEffect(() => save(ALARMS_KEY, JSON.stringify(alarms)), [alarms]);
 
-  const isCountdown = tool?.mode === "timer" || tool?.mode === "pomodoro";
+  const isCountdown = tool?.mode === "timer" || tool?.mode === "pomodoro" || tool?.mode === "focus";
   const paused = !tool ? false : tool.mode === "stopwatch" ? tool.elapsed !== null : tool.left !== null;
   const ms = !tool ? 0 : tool.mode === "stopwatch" ? (tool.elapsed ?? now - tool.start) : (tool.left ?? Math.max(tool.end - now, 0));
 
@@ -66,7 +77,12 @@ export function useTools(onDing: (d: Ding) => void) {
     if (!tool || tool.mode === "stopwatch" || tool.left !== null || tool.end > now) return;
     if (tool.mode === "timer") {
       setTool(null);
-      ding.current({ title: tool.label ? `${tool.label} · time's up` : "Time's up", subtitle: `Your ${lengthText(tool.total)} timer has finished` });
+      ding.current({ title: tool.label ? `${tool.label} · time's up` : "Time's up", subtitle: `Your ${lengthText(tool.total)} timer has finished`, ring: true });
+      return;
+    }
+    if (tool.mode === "focus") {
+      setTool(null);
+      ding.current({ title: "Focus done", subtitle: `${lengthText(tool.total)} of focus · every app is back` });
       return;
     }
     const next = tool.phase !== "focus" ? "focus" : tool.round % POMODORO.rounds === 0 ? "long" : "break";
@@ -81,8 +97,18 @@ export function useTools(onDing: (d: Ding) => void) {
     const due = alarms.filter((a) => a.at <= now);
     if (!due.length) return;
     setAlarms((list) => list.filter((a) => a.at > now));
-    due.forEach((a) => ding.current({ title: a.label || "Alarm", subtitle: `It's ${atText(a.at)}` }));
+    due.forEach((a) => ding.current({ title: a.label || "Alarm", subtitle: `It's ${atText(a.at)}`, alarm: true, ring: true }));
   }, [alarms, now]);
+
+  // A running (not paused) focus session keeps other apps out; the backend does the watching.
+  const focusApps = tool?.mode === "focus" && tool.left === null ? tool.apps.map((a) => a.exe).join("|") : "";
+  useEffect(() => {
+    (focusApps ? invoke("focus_set", { apps: focusApps.split("|") }) : invoke("focus_clear")).catch(() => {});
+  }, [focusApps]);
+  useEffect(() => {
+    const off = listen<string>("focus-blocked", (e) => blocked.current(e.payload));
+    return () => void off.then((f) => f());
+  }, []);
 
   const nextAlarm = alarms.length ? alarms.reduce((a, b) => (a.at < b.at ? a : b)) : null;
 
@@ -92,9 +118,11 @@ export function useTools(onDing: (d: Ding) => void) {
     progress: tool && tool.mode !== "stopwatch" ? ms / tool.total : null,
     /** What it is, for the notch and the card: "Tea", "Focus 2/4", "Stopwatch". */
     label: !tool ? "" : tool.mode === "timer" ? tool.label || "Timer" : tool.mode === "stopwatch" ? "Stopwatch"
+      : tool.mode === "focus" ? `Focus · ${tool.apps.map((a) => a.name).join(", ")}`
       : tool.phase === "focus" ? `Focus ${tool.round}/${POMODORO.rounds}` : tool.phase === "long" ? "Long break" : "Break",
     timer: (total: number, label = "") => setTool({ mode: "timer", label: label.trim().slice(0, 40), ...countdown(total) }),
     pomodoro: () => setTool({ mode: "pomodoro", phase: "focus", round: 1, ...countdown(POMODORO.focus) }),
+    focus: (total: number, apps: FocusApp[]) => setTool({ mode: "focus", apps: apps.map(({ exe, name }) => ({ exe, name })), ...countdown(total) }),
     stopwatch: () => setTool({ mode: "stopwatch", start: Date.now(), elapsed: null, laps: [] }),
     toggle: () =>
       setTool((t) => {
@@ -200,9 +228,9 @@ function Running({ tools }: { tools: Tools }) {
   );
 }
 
-type Mode = "timer" | "pomodoro" | "stopwatch" | "alarms";
+type Mode = "timer" | "pomodoro" | "focus" | "stopwatch" | "alarms";
 const MODES: { id: Mode; label: string; icon: IconName }[] = [
-  { id: "timer", label: "Timer", icon: "timer" }, { id: "pomodoro", label: "Pomodoro", icon: "passed" },
+  { id: "timer", label: "Timer", icon: "timer" }, { id: "pomodoro", label: "Pomodoro", icon: "passed" }, { id: "focus", label: "Focus", icon: "dnd" },
   { id: "stopwatch", label: "Stopwatch", icon: "stopwatch" }, { id: "alarms", label: "Alarms", icon: "bell" },
 ];
 const PRESETS = [1, 3, 5, 10, 15, 25, 30, 45, 60];
@@ -272,6 +300,8 @@ export function TimerView({ tools }: { tools: Tools }) {
         </div>
       )}
 
+      {mode === "focus" && !tools.tool && <FocusSetup tools={tools} />}
+
       {mode === "stopwatch" && !tools.tool && (
         <div className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-2.5">
           <div className="min-w-0 flex-1">
@@ -315,6 +345,94 @@ export function TimerView({ tools }: { tools: Tools }) {
         </>
       )}
       {error && <div className="px-1 text-[11px] text-[#ff6b6b]">{error}</div>}
+    </div>
+  );
+}
+
+/** "Stay focused": centred like the download pop-up, with Kit looking worried beside the title. */
+export function FocusFlash({ app }: { app: string }) {
+  return (
+    <div className="flex h-15 flex-col items-center justify-center gap-0.5 px-5 text-center">
+      <div className="flex items-center gap-1.5 text-[13.5px] font-semibold">
+        <Kit mood="worried" size={18} />
+        Stay focused
+      </div>
+      <div className="max-w-full truncate text-[11.5px] text-white/55">{app} isn't part of this focus</div>
+    </div>
+  );
+}
+
+const FOCUS_PRESETS = [25, 45, 60, 90, 120];
+const FOCUS_ADDED_KEY = "island.focusApps"; // apps added with "Add app", offered every time
+const FOCUS_PICKED_KEY = "island.focusPicked"; // last session's apps, picked again
+const START_MENU = String.raw`C:\ProgramData\Microsoft\Windows\Start Menu\Programs`;
+
+/** Pick a length and the apps to work in; everything else is minimised until the time is up. */
+function FocusSetup({ tools }: { tools: Tools }) {
+  const [apps, setApps] = useState<FocusApp[] | null>(null);
+  const [added, setAdded] = useState<FocusApp[]>(() => stored(FOCUS_ADDED_KEY, []));
+  const [picked, setPicked] = useState<string[]>(() => stored(FOCUS_PICKED_KEY, []));
+  const [minutes, setMinutes] = useState(25);
+  const [length, setLength] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const appsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => void invoke<FocusApp[]>("focus_apps").then(setApps).catch(() => setApps([])), []);
+  // Added apps first, then the open ones, each app once.
+  const all = apps && [...added, ...apps].filter((a, i, list) => list.findIndex((b) => b.exe === a.exe) === i);
+
+  const add = async () => {
+    const path = await open({ title: "Add an app to focus with", defaultPath: START_MENU, filters: [{ name: "Apps", extensions: ["exe", "lnk"] }] }).catch(() => null);
+    if (typeof path !== "string") return;
+    try {
+      const app = await invoke<FocusApp>("focus_app", { path });
+      // Saved straight away: the island closes while the file dialog is open, taking this panel with it.
+      const list = [app, ...stored<FocusApp[]>(FOCUS_ADDED_KEY, []).filter((a) => a.exe !== app.exe)];
+      const chosen = [...new Set([...stored<string[]>(FOCUS_PICKED_KEY, []), app.exe])];
+      save(FOCUS_ADDED_KEY, JSON.stringify(list));
+      save(FOCUS_PICKED_KEY, JSON.stringify(chosen));
+      setAdded(list);
+      setPicked(chosen);
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+  const pick = (exe: string) => setPicked((p) => (p.includes(exe) ? p.filter((e) => e !== exe) : [...p, exe]));
+  const start = () => {
+    const ms = length ? parseDuration(length) : minutes * MIN;
+    if (!ms) return setError("Try 50, 1:30 or 2h");
+    const chosen = (all ?? []).filter((a) => picked.includes(a.exe));
+    if (!chosen.length) return setError("Pick at least one app to work in");
+    save(FOCUS_PICKED_KEY, JSON.stringify(chosen.map((a) => a.exe)));
+    tools.focus(ms, chosen);
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="no-scrollbar -mx-0.5 flex gap-1.5 overflow-x-auto px-0.5">
+        {FOCUS_PRESETS.map((m) => (
+          <Chip key={m} onClick={() => { setMinutes(m); setLength(""); }} active={!length && minutes === m}>{lengthText(m * MIN)}</Chip>
+        ))}
+        <Field value={length} onChange={setLength} onEnter={start} placeholder="Other: 50, 2h" className="w-28 shrink-0" />
+      </div>
+      <div ref={appsRef} className="no-scrollbar -mx-0.5 flex gap-1.5 overflow-x-auto px-0.5"
+        onWheel={(e) => appsRef.current && (appsRef.current.scrollLeft += e.deltaY + e.deltaX)}>
+        {all === null ? <span className="px-1 text-[11.5px] text-white/40">Looking at your open apps…</span>
+          : all.map((a) => (
+            <button key={a.exe} onClick={() => pick(a.exe)} aria-pressed={picked.includes(a.exe)}
+              className={`flex h-8 shrink-0 items-center gap-1.5 rounded-full pr-3 pl-1.5 text-[12px] font-medium transition-colors ${picked.includes(a.exe) ? "bg-white text-black" : "bg-white/8 text-white/75 hover:bg-white/14"}`}>
+              {a.icon ? <img src={a.icon} alt="" className="size-5" draggable={false} /> : <Icon name="code" size={16} />}
+              <span className="max-w-28 truncate">{a.name}</span>
+            </button>
+          ))}
+        <Chip onClick={add} tip="Add any app, open or not"><Icon name="plus" size={13} />Add app</Chip>
+      </div>
+      <div className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-2.5">
+        <div className="min-w-0 flex-1 text-[11.5px] text-white/45">
+          {error ?? "Only the apps you pick stay open; others are minimised and Do Not Disturb is on until it ends."}
+        </div>
+        <Chip onClick={start} active>Start</Chip>
+      </div>
     </div>
   );
 }

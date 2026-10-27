@@ -291,7 +291,7 @@ fn listening() -> Vec<(u16, u32, bool)> {
     list
 }
 
-fn exe_of(pid: u32) -> Option<PathBuf> {
+pub(crate) fn exe_of(pid: u32) -> Option<PathBuf> {
     unsafe {
         let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
         let mut buf = [0u16; 1024];
@@ -567,7 +567,10 @@ const GITHUB_QUERY: &str = "query {
 }";
 
 fn gh(args: &[&str]) -> Result<serde_json::Value, String> {
+    // gh's telemetry re-launches gh detached after each call, and that copy runs `tzutil` in a new,
+    // visible console: a terminal flashed every time the island checked GitHub.
     let out = crate::convert::command("gh")
+        .env("GH_TELEMETRY", "false")
         .args(args)
         .output()
         .map_err(|e| if e.kind() == std::io::ErrorKind::NotFound { "gh-missing".to_string() } else { e.to_string() })?;

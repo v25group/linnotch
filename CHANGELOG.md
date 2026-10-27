@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.0-beta.1
+
+linnotch moves from alpha to beta: everyday use is solid, and the island grows into a small home for your day.
+
+- **Focus sessions (Timer → Focus):** pick a length and the apps you're working in. Any other app that comes to the front is minimised, with a "Stay focused" nudge, and Do Not Disturb is on until the time is up. Add any app with **+ Add app** (Start menu shortcuts work); your apps are remembered.
+- **Bookshelf:** pin apps, folders and files and open them in one click. **Ctrl + drag** anything onto the island to pin it. Photos, videos and songs show their own preview (album art for songs); hover a pin for **Show in folder** or to unpin. Hidden at first: turn it on in Settings → Tabs.
+- **Settings tab** (replaces About), with three panes: **About** (version, updates, **Start with Windows**, Look), **Shortcuts**, and **Tabs**: choose which tabs the dock shows (at least 4), or open a hidden one. The dock never gets wider than the island; extra tabs scroll.
+- **Look: Kit or Eyes.** Kit the fox stays linnotch's face; the new **Eyes** look shows just Kit's glowing eyes, which follow your mouse, blink, squint at clicks, wink when you copy, look down while you type, get dizzy when you shake the mouse, and doze off when you're away. The choice applies everywhere Kit appears.
+- **Developer tab is off on new installs** (no background GitHub checks for people who don't need them). Existing installs keep it.
+- **Alarms and timers:** the chime is now loud and clear (it could be silent before), music pauses while it rings and plays again after, and "9:34" means the next 9:34, morning or evening, instead of always the morning.
+- **Fixed:** a terminal window flashed every minute or two while the Developer tab was on (GitHub CLI's telemetry). linnotch now turns that telemetry off for its own checks.
+- Pop-ups for timers, alarms, calendar events, mic/camera use and "Opened in…" are centred like the rest. Tooltips stay inside the island instead of running off the edge.
+
 ## 0.1.0-alpha.4
 
 - **Meet Kit:** a little fox now lives in the resting notch. The notch shrinks to just Kit plus what matters right now (music bars, a running timer, mic/camera in use, low battery). Kit looks around, wanders, wags and yawns while idle, wears headphones when music plays, sleeps at night and looks worried when the battery is low. Kit also turns up in empty pages and in "Update completed".

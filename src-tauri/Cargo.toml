@@ -1,6 +1,6 @@
 [package]
 name = "linnotch"
-version = "0.1.0-alpha.4"
+version = "0.1.0-beta.1"
 description = "linnotch: a Dynamic Island for Windows"
 authors = ["V25Group (Venticinque Aeyon Groupe)"]
 license = "MIT"
@@ -33,7 +33,7 @@ tauri-plugin-drag = "2"
 
 [target.'cfg(windows)'.dependencies]
 base64 = "0.22"
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_System_Power", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_Com", "Win32_Media_Audio", "Win32_Media_Audio_Endpoints", "Foundation", "Foundation_Collections", "Devices_Enumeration", "Devices_Bluetooth", "ApplicationModel", "ApplicationModel_Appointments", "UI_Notifications", "UI_Notifications_Management", "Media_Control", "Storage_Streams", "Win32_Graphics_Gdi", "Win32_System_Ole", "Win32_System_DataExchange", "Win32_System_Memory", "UI_Shell", "Devices_Radios", "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_System_Console", "Win32_System_Environment", "Win32_System_Diagnostics_ToolHelp"] }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_System_Power", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_Com", "Win32_Media_Audio", "Win32_Media_Audio_Endpoints", "Foundation", "Foundation_Collections", "Devices_Enumeration", "Devices_Bluetooth", "ApplicationModel", "ApplicationModel_Appointments", "UI_Notifications", "UI_Notifications_Management", "Media_Control", "Storage_Streams", "Win32_Graphics_Gdi", "Win32_System_Ole", "Win32_System_DataExchange", "Win32_System_Memory", "UI_Shell", "Devices_Radios", "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_System_Console", "Win32_System_Environment", "Win32_System_Diagnostics_ToolHelp", "Win32_Storage_FileSystem"] }
 windows-collections = "0.3"
 windows-core = "0.62"
 winreg = "0.56.0"

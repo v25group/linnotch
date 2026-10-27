@@ -5,9 +5,13 @@ mod convert;
 mod dev;
 #[cfg(windows)]
 mod downloads;
+#[cfg(windows)]
+mod focus;
 mod library;
 #[cfg(windows)]
 mod notes;
+#[cfg(windows)]
+mod pins;
 #[cfg(windows)]
 mod openwith;
 mod radio;
@@ -26,7 +30,7 @@ mod update;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::{thread, time::Duration};
+use std::{thread, time::{Duration, Instant}};
 use tauri::{Emitter, Manager, PhysicalPosition, State, WebviewWindow};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
@@ -78,11 +82,29 @@ async fn convert_file(window: WebviewWindow, path: String, preset: String) -> Re
     .map_err(|e| e.to_string())?
 }
 
-/// Open Explorer with the file selected.
+/// The tray's "Start with Windows" check, so Settings can keep it in step.
+struct StartupItem(tauri::menu::CheckMenuItem<tauri::Wry>);
+
+#[tauri::command]
+fn startup_get() -> bool {
+    platform::starts_with_windows()
+}
+
+/// Settings → About's switch: the same setting as the tray menu's.
+#[tauri::command]
+fn startup_set(app: tauri::AppHandle, on: bool) -> bool {
+    platform::set_start_with_windows(on);
+    if let Some(item) = app.try_state::<StartupItem>() {
+        let _ = item.0.set_checked(on);
+    }
+    platform::starts_with_windows()
+}
+
+/// Open Explorer with the file (or folder) selected.
 #[tauri::command]
 fn reveal(path: String) -> Result<(), String> {
-    if !PathBuf::from(&path).is_file() {
-        return Err(format!("not a file: {path}"));
+    if !PathBuf::from(&path).exists() {
+        return Err(format!("not found: {path}"));
     }
     platform::explorer(format!("/select,{path}"))
 }
@@ -99,7 +121,9 @@ fn in_pill((x, y): (f64, f64), pill: Pill, window_w: f64) -> bool {
 fn watch(window: WebviewWindow, hwnd: isize, origin: PhysicalPosition<i32>, scale: f64, window_w: f64, pill: PillState) {
     let (mut hovered, mut hidden, mut click_through) = (false, false, false);
     let mut battery = None;
-    let (mut was_over, mut was_shift, mut foreground) = (false, false, 0);
+    let (mut was_over, mut was_shift, mut was_ctrl, mut foreground) = (false, false, false, 0);
+    let (mut looked, mut was_down) = ((0i32, 0i32), false);
+    let (mut last_cursor, mut keyed_at, mut typing, mut away) = (None, None::<Instant>, false, false);
     for tick in 0u64.. {
         let now_hidden = platform::fullscreen_app_running();
         let cursor = window
@@ -108,12 +132,50 @@ fn watch(window: WebviewWindow, hwnd: isize, origin: PhysicalPosition<i32>, scal
             .map(|c| ((c.x - origin.x as f64) / scale, (c.y - origin.y as f64) / scale));
         let pill = *pill.0.lock().unwrap();
         let over = !now_hidden && cursor.is_some_and(|c| in_pill(c, pill, window_w));
-        // A file dragged onto the island opens "Open with"; with Shift held it shows the formats instead.
-        // Drag events don't carry modifier keys, so Shift is reported on its own.
+        // A file dragged onto the island opens "Open with"; with Shift held it shows the formats
+        // instead, with Ctrl it pins it to the Bookshelf. Drag events don't carry modifier keys,
+        // so they're reported on their own.
         let shift = platform::shift_held();
         if shift != was_shift {
             was_shift = shift;
             let _ = window.emit("shift", shift);
+        }
+        let ctrl = platform::ctrl_held();
+        if ctrl != was_ctrl {
+            was_ctrl = ctrl;
+            let _ = window.emit("ctrl", ctrl);
+        }
+        // Kit's eyes follow the cursor and blink at clicks: where it is from the notch's centre
+        // (only when it has moved, at most 15 times a second) and each press of the left button.
+        if let Some((x, y)) = cursor.filter(|_| tick % 2 == 0 && !now_hidden) {
+            let at = ((x - window_w / 2.0) as i32, (y - 17.0) as i32);
+            if (at.0 - looked.0).abs() + (at.1 - looked.1).abs() > 2 {
+                looked = at;
+                let _ = window.emit("cursor", at);
+            }
+        }
+        let down = platform::left_button_held();
+        if down && !was_down {
+            let _ = window.emit("click", ());
+        }
+        was_down = down;
+        // Typing, without reading keys: fresh input while the mouse stays still and unpressed.
+        // Away: no input at all for 5 minutes. Both for the eyes skin.
+        let idle = platform::idle_ms();
+        let still = cursor == last_cursor;
+        last_cursor = cursor;
+        if idle < 100 && still && !down {
+            keyed_at = Some(Instant::now());
+        }
+        let now_typing = keyed_at.is_some_and(|t| t.elapsed() < Duration::from_millis(1500)) && idle < 1500;
+        if now_typing != typing {
+            typing = now_typing;
+            let _ = window.emit("typing", typing);
+        }
+        let now_away = idle > 5 * 60_000;
+        if now_away != away {
+            away = now_away;
+            let _ = window.emit("away", away);
         }
         // Pinned keeps the island open, but only the cursor being over it makes it catch the mouse:
         // the transparent rest of the window must never block clicks or scrolling underneath.
@@ -149,7 +211,7 @@ fn watch(window: WebviewWindow, hwnd: isize, origin: PhysicalPosition<i32>, scal
         let now_foreground = platform::foreground_window();
         // Not while a mouse button is held (repositioning the window cancels a drag or text
         // selection in the webview) or while the island itself has focus (it's on top then).
-        let busy = platform::left_button_held() || now_foreground == hwnd;
+        let busy = down || now_foreground == hwnd;
         if !now_hidden && !busy && (now_foreground != foreground || tick % 30 == 0) {
             platform::keep_on_top(hwnd);
         }
@@ -161,7 +223,7 @@ fn watch(window: WebviewWindow, hwnd: isize, origin: PhysicalPosition<i32>, scal
 }
 
 /// Global shortcuts: Ctrl+Alt plus a key. The UI gets the action name as a "shortcut" event;
-/// the list it shows people lives in src/features/shortcuts/shortcuts.tsx.
+/// the list it shows people lives in src/features/settings/shortcuts.tsx.
 const SHORTCUTS: &[(Code, &str)] = &[
     (Code::Space, "toggle"),
     (Code::KeyN, "next"),
@@ -188,6 +250,7 @@ fn tray(app: &tauri::App) -> tauri::Result<()> {
     let quit = MenuItem::with_id(app, "quit", "Quit linnotch", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&version, &PredefinedMenuItem::separator(app)?, &startup, &issue, &PredefinedMenuItem::separator(app)?, &quit])?;
     let check = startup.clone();
+    app.manage(StartupItem(startup.clone()));
     let mut tray = TrayIconBuilder::with_id("main").tooltip("linnotch").menu(&menu).show_menu_on_left_click(true);
     if let Some(icon) = app.default_window_icon() {
         tray = tray.icon(icon.clone());
@@ -277,6 +340,8 @@ pub fn run() {
             screenshots::spawn(app.handle().clone(), window.clone());
             #[cfg(windows)]
             downloads::spawn(app.handle().clone(), window.clone());
+            #[cfg(windows)]
+            focus::spawn(window.clone());
             // A shortcut another app already owns is skipped rather than stopping the island.
             for (code, action) in SHORTCUTS {
                 if let Err(e) = app.global_shortcut().register(shortcut(*code)) {
@@ -292,7 +357,8 @@ pub fn run() {
             screenshots::screenshots, screenshots::screenshot_copy, screenshots::screenshot_open,
             downloads::open_download, toggles::toggles, toggles::set_toggle, toggles::open_notification_center, openwith::apps_for, openwith::open_with, radio::radio_watch, radio::radio_stop,
             dev::focus_window, dev::ports, dev::stop_port, dev::open_url, dev::meters, dev::github, dev::dev_setup, dev::install_cli, dev::connect_claude, clipboard::clipboard_write,
-            dev::answer_ask, dev::free_port, dev::containers, dev::stop_container, dev::shell_watch, notes::notes_list, notes::note_read, notes::note_write, notes::note_new, notes::note_import, notes::note_delete, notes::note_open, update::update_check, update::update_install])
+            dev::answer_ask, dev::free_port, dev::containers, dev::stop_container, dev::shell_watch, notes::notes_list, notes::note_read, notes::note_write, notes::note_new, notes::note_import, notes::note_delete, notes::note_open, update::update_check, update::update_install,
+            focus::focus_apps, focus::focus_app, focus::focus_set, focus::focus_clear, pins::pin_info, pins::pin_open, startup_get, startup_set])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

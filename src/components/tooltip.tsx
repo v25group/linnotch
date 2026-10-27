@@ -1,6 +1,8 @@
 // One shared tooltip for the island. The first one waits a beat; moving straight on to another
-// control keeps it open and slides it over, the way native toolbars do.
-import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
+// control keeps it open and slides it over, the way native toolbars do. A tooltip near the
+// window's edge is nudged back inside (the arrow stays on its control); a line break in the text
+// starts a new line.
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 
 type Tip = { owner: string; text: string; x: number; y: number };
@@ -9,6 +11,7 @@ type Api = { show: (tip: Tip) => void; hide: (owner?: string) => void };
 const TipContext = createContext<Api>({ show() {}, hide() {} });
 
 const DELAY = 450;
+const EDGE = 8; // px kept clear of the window's sides
 const WARM = 300; // ms after a tooltip closes during which the next one opens at once
 
 export function TooltipLayer({ active, children }: { active: boolean; children: React.ReactNode }) {
@@ -17,6 +20,16 @@ export function TooltipLayer({ active, children }: { active: boolean; children: 
   const current = useRef<Tip | null>(null);
   const pending = useRef<{ owner: string; timer: number } | null>(null);
   const hiddenAt = useRef(0);
+  const bubble = useRef<HTMLDivElement>(null);
+  const [shift, setShift] = useState(0);
+  // Measured where it would sit centred, then moved just enough to fit the window.
+  useLayoutEffect(() => {
+    const el = bubble.current;
+    if (!tip || !el) return setShift(0);
+    const half = el.offsetWidth / 2;
+    const left = tip.x - half, right = tip.x + half;
+    setShift(left < EDGE ? EDGE - left : right > innerWidth - EDGE ? innerWidth - EDGE - right : 0);
+  }, [tip]);
 
   const api = useMemo<Api>(() => {
     const set = (t: Tip | null) => {
@@ -63,13 +76,15 @@ export function TooltipLayer({ active, children }: { active: boolean; children: 
           >
             <div className="-mb-1 size-2 rotate-45 rounded-xs bg-[#1c1c1e]" />
             <motion.div
+              ref={bubble}
               layout
-              className="overflow-hidden rounded-lg bg-[#1c1c1e] px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-white/90"
+              animate={{ x: shift }}
+              className="max-w-[calc(100vw-16px)] overflow-hidden rounded-lg bg-[#1c1c1e] px-2.5 py-1 text-center text-[12px] font-medium whitespace-pre-line text-white/90"
               style={{ boxShadow: "inset 0 0 0 1px rgb(255 255 255 / 0.08), 0 6px 18px rgb(0 0 0 / 0.35)" }}
               transition={{ type: "spring", stiffness: 520, damping: 36 }}
             >
               <AnimatePresence mode="popLayout" initial={false}>
-                <motion.span key={tip.text} className="block"
+                <motion.span key={tip.text} className="block [overflow-wrap:anywhere]"
                   initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.14 }}>
                   {tip.text}

@@ -2,7 +2,7 @@
 
 **A Dynamic Island for Windows.** linnotch sits at the top of your screen. It shows what's playing, your notifications, timers and more, and opens into a panel of everyday tools when you hover over it.
 
-> **This is an alpha (0.1.0-alpha.4).** It works well day to day, but expect rough edges. Please [report anything odd](https://github.com/v25group/linnotch/issues).
+> **This is a beta (0.1.0-beta.1).** It works well day to day; a few rough edges may remain. Please [report anything odd](https://github.com/v25group/linnotch/issues).
 
 Made by [V25Group](https://www.v25group.com/) (Venticinque Aeyon Groupe).
 
@@ -16,19 +16,20 @@ Made by [V25Group](https://www.v25group.com/) (Venticinque Aeyon Groupe).
 
 | Tab | What's in it |
 | --- | --- |
-| **Today** | Weather for your city, quick toggles (Wi-Fi, Bluetooth, Focus, dark mode, mute mic, Developer tab on/off). |
+| **Today** | Weather for your city, quick toggles (Wi-Fi, Bluetooth, Focus, dark mode, mute mic). |
 | **Now playing** | Controls for Spotify, browsers and any app using Windows media controls: cover art, seek bar, shuffle and repeat. |
 | **Library** | Plays a music folder of your choice, with covers. |
 | **Radio** | Over 50,000 live stations from Radio Browser, with what's on air, favourites, and India / Tamil / genre filters. |
-| **Timer** | Timers of any length with labels, Pomodoro, stopwatch with laps, alarms. |
+| **Timer** | Timers of any length with labels, Pomodoro, **Focus** (pick the apps you work in; any other app is minimised and Do Not Disturb is on until the time is up), stopwatch with laps, alarms. |
 | **Clipboard** | Your last copies; click one to paste it where you were. Passwords are never kept, and API keys are hidden and forgotten after a minute. |
 | **Quick note** | Plain-text notes that save as you type. Ctrl+S saves now, Ctrl+N starts a new note. The same files open in Notepad. |
 | **Notifications** | History of your notifications. Hover one to reply in its app or dismiss it. |
 | **Screenshots** | Recent screenshots: drag them into any app, copy, or open. |
-| **Developer** | See below. Turn it off in Today if you don't need it. |
-| **About** | Version, updates (install now, or automatically), and all keyboard shortcuts. |
+| **Bookshelf** | Apps, folders and files you pin, opened in one click. Hidden at first: add it in Settings → Tabs. |
+| **Developer** | See below. Off on a new install: turn it on in Settings → Tabs. |
+| **Settings** | **About**: version, updates (install now, or automatically), and **Look** (Kit the fox, or just Kit's eyes following your mouse). **Shortcuts**: every keyboard shortcut. **Tabs**: choose which tabs the dock shows (at least 4), or open a hidden one. |
 
-**Drag a file onto the notch** to open it with any app. Songs can play right in linnotch, and text files open as notes. **Hold Shift while dragging** to convert audio, video or images to another format (needs FFmpeg).
+**Drag a file onto the notch** to open it with any app. Songs can play right in linnotch, and text files open as notes. **Hold Shift while dragging** to convert audio, video or images to another format (needs FFmpeg). **Hold Ctrl while dragging** to pin apps, folders or files to the Bookshelf.
 
 ### For developers
 
@@ -55,9 +56,9 @@ If another app already uses one of these, linnotch skips that one and the rest s
 
 ## Install
 
-1. Download **`linnotch-0.1.0-alpha.4-setup.exe`** from [Releases](https://github.com/v25group/linnotch/releases).
+1. Download **`linnotch-0.1.0-beta.1-setup.exe`** from [Releases](https://github.com/v25group/linnotch/releases).
 2. Run it. It installs for your user only, with no admin rights needed.
-3. **Windows SmartScreen** may say "Windows protected your PC", because this alpha isn't code-signed yet. Click **More info → Run anyway**.
+3. **Windows SmartScreen** may say "Windows protected your PC", because this beta isn't code-signed yet. Click **More info → Run anyway**.
 
 The installer can start linnotch when you sign in, and installs Microsoft Edge WebView2 if your PC doesn't have it (Windows 11 already does).
 

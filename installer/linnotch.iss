@@ -3,10 +3,10 @@
 ; can start linnotch at sign-in, and installs WebView2 if it's missing.
 
 #ifndef AppVersion
-  #define AppVersion "0.1.0-alpha.4"
+  #define AppVersion "0.1.0-beta.1"
 #endif
 #ifndef FileVersion
-  #define FileVersion "0.1.0.4"
+  #define FileVersion "0.1.0.101"
 #endif
 #define AppName "linnotch"
 #define AppExe "linnotch.exe"

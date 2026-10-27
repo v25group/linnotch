@@ -114,6 +114,23 @@ pub fn shift_held() -> bool {
     (unsafe { GetAsyncKeyState(VK_SHIFT.0 as i32) }) < 0
 }
 
+/// Milliseconds since the last keyboard or mouse input anywhere. Only when, never which key.
+pub fn idle_ms() -> u32 {
+    use windows::Win32::System::SystemInformation::GetTickCount;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO};
+    let mut info = LASTINPUTINFO { cbSize: size_of::<LASTINPUTINFO>() as u32, dwTime: 0 };
+    if !unsafe { GetLastInputInfo(&mut info) }.as_bool() {
+        return 0;
+    }
+    unsafe { GetTickCount() }.wrapping_sub(info.dwTime)
+}
+
+/// Whether Ctrl is held right now, whichever window has focus.
+pub fn ctrl_held() -> bool {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_CONTROL};
+    (unsafe { GetAsyncKeyState(VK_CONTROL.0 as i32) }) < 0
+}
+
 /// Changes every time anything is copied, so the clipboard can be checked cheaply.
 pub fn clipboard_sequence() -> u32 {
     unsafe { windows::Win32::System::DataExchange::GetClipboardSequenceNumber() }

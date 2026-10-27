@@ -1,5 +1,5 @@
 // The global shortcuts, as people see them. Rust registers the same list (SHORTCUTS in
-// src-tauri/src/lib.rs) and sends the action name as a "shortcut" event. Shown in the About tab.
+// src-tauri/src/lib.rs) and sends the action name as a "shortcut" event. Shown in Settings → Shortcuts.
 import { Icon } from "../../components/icons";
 
 export const SHORTCUTS = [
@@ -45,6 +45,10 @@ export function ShortcutsView() {
         <div className="flex min-w-0 items-center gap-2.5 rounded-xl bg-white/5 px-2 py-1.5">
           <Key wide>Shift</Key>
           <span className="truncate text-[12px] text-white/75">+ drag a file: convert</span>
+        </div>
+        <div className="flex min-w-0 items-center gap-2.5 rounded-xl bg-white/5 px-2 py-1.5">
+          <Key wide>Ctrl</Key>
+          <span className="truncate text-[12px] text-white/75">+ drag: pin to Bookshelf</span>
         </div>
       </div>
     </div>

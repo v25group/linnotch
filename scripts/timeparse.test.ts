@@ -18,7 +18,11 @@ for (const bad of ["", "abc", "0", "-5", "25h", "1:2:3:4"]) assert.equal(parseDu
 const now = new Date(2026, 9, 24, 10, 0).getTime();
 const at = (d: number, hh: number, mm: number) => new Date(2026, 9, d, hh, mm).getTime();
 assert.equal(parseAlarm("10:30", now), at(24, 10, 30));
-assert.equal(parseAlarm("7:30", now), at(25, 7, 30), "already past today: tomorrow");
+assert.equal(parseAlarm("7:30", now), at(24, 19, 30), "7:30 am has passed, so this evening");
+assert.equal(parseAlarm("9:34", at(24, 21, 30)), at(24, 21, 34), "said at 9:30 pm: tonight, not tomorrow morning");
+assert.equal(parseAlarm("12:15", now), at(24, 12, 15));
+assert.equal(parseAlarm("7:30am", now), at(25, 7, 30), "am given, already past: tomorrow");
+assert.equal(parseAlarm("0730", now), at(25, 7, 30), "leading zero: 24-hour clock");
 assert.equal(parseAlarm("7:30pm", now), at(24, 19, 30));
 assert.equal(parseAlarm("7pm", now), at(24, 19, 0));
 assert.equal(parseAlarm("12am", now), at(25, 0, 0));

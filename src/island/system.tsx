@@ -27,16 +27,17 @@ export type Flash =
   | { kind: "privacy"; what: "mic" | "camera"; app: string }
   | { kind: "notification"; note: Note }
   | { kind: "event"; event: CalEvent }
-  | { kind: "timer"; title: string; subtitle: string } // a timer, Pomodoro phase or alarm ended (src/features/timer/timer.tsx)
+  | { kind: "timer"; title: string; subtitle: string; alarm?: boolean } // a timer, Pomodoro phase or alarm ended (src/features/timer/timer.tsx)
+  | { kind: "focus"; app: string } // a focus session minimised an app; drawn by src/features/timer/timer.tsx
   | { kind: "track" } // drawn by src/features/music/media.tsx
   | { kind: "opened"; app: string; error?: string }
   | { kind: "screenshot"; path: string; at: number } // drawn by src/features/screenshots/shelf.tsx
   | { kind: "download"; path: string; name: string; size: number } // drawn by src/features/downloads/downloads.tsx
   | { kind: "dev"; dev: DevFlash } // drawn by src/features/developer/dev.tsx
-  | { kind: "update"; version: string }; // drawn by src/features/about/about.tsx
+  | { kind: "update"; version: string }; // drawn by src/features/settings/settings.tsx
 
 const FLASH_MS: Record<Flash["kind"], number> = {
-  power: 2600, volume: 1500, brightness: 1500, bluetooth: 3000, privacy: 3000, notification: 5000, event: 6000, timer: 8000, track: 3000, opened: 2200, screenshot: 5000, download: 5000, dev: 6000, update: 6000,
+  power: 2600, volume: 1500, brightness: 1500, bluetooth: 3000, privacy: 3000, notification: 5000, event: 6000, timer: 8000, focus: 3000, track: 3000, opened: 2200, screenshot: 5000, download: 5000, dev: 6000, update: 6000,
 };
 
 export const COLOR = {
@@ -53,7 +54,7 @@ export function flashColor(f: Flash) {
     case "bluetooth": return COLOR.bluetooth;
     case "privacy": return COLOR[f.what];
     case "event": return COLOR.event;
-    case "timer": return COLOR.tool;
+    case "timer": case "focus": return COLOR.tool;
     case "dev": return f.dev.color;
     case "update": return COLOR.charge;
     default: return COLOR.white;
@@ -179,21 +180,32 @@ export function useSystem() {
   return { battery, privacy, event, flash, show, notes, unread, removeNote, clearNotes, markRead };
 }
 
-/** Three soft beeps when a timer ends. */
-export function chime() {
-  const ctx = new AudioContext();
-  [0, 0.25, 0.5].forEach((at) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.frequency.value = 880;
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime + at);
-    gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + at + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + 0.2);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start(ctx.currentTime + at);
-    osc.stop(ctx.currentTime + at + 0.22);
-  });
-  setTimeout(() => ctx.close(), 1000);
+let audio: AudioContext | null = null;
+
+/** When a timer or alarm ends: three rounds of a rising two-note beep, about 2 s, loud enough to
+    hear over music. */
+export async function chime() {
+  audio ??= new AudioContext();
+  // Without a recent click WebView2 can hand out a suspended context (autoplay rules), which plays
+  // silence; tauri.conf.json lifts that rule too.
+  await audio.resume().catch(() => {});
+  const ctx = audio;
+  const t0 = ctx.currentTime + 0.05;
+  for (let round = 0; round < 3; round++) {
+    for (const [at, hz] of [[0, 880], [0.16, 1320]]) {
+      const start = t0 + round * 0.7 + at;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.value = hz;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.5, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.15);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.16);
+    }
+  }
 }
 
 /** m:ss, or h:mm:ss from an hour up. A countdown rounds up so it reads 0:01 until it's done. */
@@ -287,9 +299,10 @@ export function Collapsed({ ref, mood, accent, battery, privacy, event, tools, c
   const soon = event && event.start - now <= 60 * 60_000 ? event : null;
   const charging = !!battery?.plugged && battery.percent < 100;
   const low = !!battery && !battery.plugged && battery.percent <= 20;
+  const face: Mood = mood === "idle" && isNight(now) ? "sleep" : low ? "worried" : mood;
   return (
     <div ref={ref} className="mx-auto flex h-8.5 w-max min-w-22 items-center justify-center gap-2.5 px-3.5 text-[12.5px] font-medium whitespace-nowrap tabular-nums">
-      <Kit mood={mood === "idle" && isNight(now) ? "sleep" : low ? "worried" : mood} accent={accent} />
+      <Kit mood={face} accent={accent} />
       {bars}
       <ToolChip tools={tools} />
       <AnimatePresence>
@@ -336,9 +349,25 @@ function FlashTile({ icon, color, pulse }: { icon: IconName; color: string; puls
   );
 }
 
+/** A pop-up: centred like the download one (icon beside the title, the detail under it), or, with
+    `right` (battery and Bluetooth levels), a row with that value on the right. `pulse` wiggles the icon. */
 export function FlashRow({ icon, color, title, subtitle, right, pulse }: {
   icon: IconName; color: string; title: string; subtitle?: string; right?: React.ReactNode; pulse?: boolean;
 }) {
+  if (!right) return (
+    <div className="flex h-15 flex-col items-center justify-center gap-0.5 px-5 text-center">
+      <div className="flex max-w-full items-center gap-1.5 text-[13.5px] font-semibold">
+        <motion.span className="grid shrink-0 place-items-center" style={{ color }}
+          initial={{ scale: 0.4, opacity: 0 }}
+          animate={pulse ? { scale: 1, opacity: 1, rotate: [0, -14, 14, -10, 10, 0] } : { scale: 1, opacity: 1 }}
+          transition={pulse ? { rotate: { repeat: Infinity, duration: 0.9, repeatDelay: 0.7 }, default: { type: "spring", stiffness: 400, damping: 18 } } : { type: "spring", stiffness: 400, damping: 18 }}>
+          <Icon name={icon} size={16} />
+        </motion.span>
+        <span className="truncate">{title}</span>
+      </div>
+      {subtitle && <div className="max-w-full truncate text-[11.5px] text-white/55">{subtitle}</div>}
+    </div>
+  );
   return (
     <div className="flex h-14 items-center gap-3 px-3.5">
       <FlashTile icon={icon} color={color} pulse={pulse} />
@@ -400,7 +429,7 @@ export function FlashView({ flash }: { flash: Flash }) {
           subtitle={[untilText(flash.event.start), flash.event.location].filter(Boolean).join(" · ")} />
       );
     case "timer":
-      return <FlashRow icon="timer" color={color} pulse title={flash.title} subtitle={flash.subtitle} />;
+      return <FlashRow icon={flash.alarm ? "bell" : "timer"} color={color} pulse title={flash.title} subtitle={flash.subtitle} />;
     case "track":
     case "screenshot":
     case "download":

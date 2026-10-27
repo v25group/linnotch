@@ -7,15 +7,18 @@ import { Icon, type IconName } from "./components/icons";
 import { TooltipLayer, useTip } from "./components/tooltip";
 import { Bars, PlayerCard, TrackFlash, useMedia } from "./features/music/media";
 import { LibraryView, useLibrary, useLocalPlayer, type Track } from "./features/music/library";
-import { AboutView, UpdateFlash, useUpdater } from "./features/about/about";
+import { SettingsView, UpdateFlash, useUpdater } from "./features/settings/settings";
 import { Kit } from "./island/kit";
 import { RadioView, useRadio } from "./features/music/radio";
 import { CONVERT, ConvertView, ISLAND_NOTES, ISLAND_PLAYER, OpenWithView, appAt, looksLikeFile, useOpenWith, withIslandPlayer } from "./features/files/openwith";
 import { COLOR, Collapsed, FlashView, NoteCard, chime, flashColor, useSystem, type Flash } from "./island/system";
-import { TimerView, useTools, type Ding } from "./features/timer/timer";
+import { FocusFlash, TimerView, useTools, type Ding } from "./features/timer/timer";
 import { ClipboardView, useClipboard } from "./features/clipboard/clipboard";
 import { DownloadCard, DownloadFlash, useDownloads, type Download } from "./features/downloads/downloads";
 import { TodayView, useDnd } from "./features/today/toggles";
+import { DOCK, useDockTabs, type DockTabs, type HoverTab } from "./features/settings/tabs";
+import { PinDropView, PinsView, usePins } from "./features/pins/pins";
+import { SkinContext, useSkin } from "./island/kit";
 import { useWeather } from "./features/today/weather";
 import { NotificationsView } from "./features/notifications/notifications";
 import { DevCard, DevChip, DevFlashView, DevView, useDev, useDevEnabled, useGitHub, useMeters } from "./features/developer/dev";
@@ -44,7 +47,8 @@ const TRAY_WIDTH = 488; // notch width + the row's 4px side padding
 // Panel widths per view; heights come from measuring the content.
 // Never narrower than the resting notch, so opening it only ever grows it.
 const PLAYER_WIDTH = 440;
-const WIDTH = { held: PLAYER_WIDTH, openwith: PLAYER_WIDTH, convert: PLAYER_WIDTH, hint: PLAYER_WIDTH, flash: COLLAPSED.width, ready: 480, converting: COLLAPSED.width, done: 420, error: 420 };
+const DOCK_MAX_WIDTH = 448; // 11 buttons of 36px with 4px gaps, plus padding
+const WIDTH = { held: PLAYER_WIDTH, openwith: PLAYER_WIDTH, pin: PLAYER_WIDTH, convert: PLAYER_WIDTH, hint: PLAYER_WIDTH, flash: COLLAPSED.width, ready: 480, converting: COLLAPSED.width, done: 420, error: 420 };
 
 const ACCENT: Record<Kind | "none", string> = { audio: "#ff6b9a", video: "#5ab8ff", image: "#4fd18b", none: "#a1a1aa" };
 const ICON: Record<Kind | "none", IconName> = { audio: "audio", video: "video", image: "image", none: "file" };
@@ -125,28 +129,17 @@ function Button({ onClick, children, accent }: { onClick: () => void; children: 
   );
 }
 
-type HoverTab = "today" | "music" | "library" | "radio" | "timer" | "clipboard" | "notifications" | "shelf" | "notes" | "dev" | "keys";
-
-const DOCK: { id: HoverTab; icon: IconName; label: string }[] = [
-  { id: "today", icon: "controls", label: "Today" },
-  { id: "music", icon: "audio", label: "Now playing" },
-  { id: "library", icon: "library", label: "Library" },
-  { id: "radio", icon: "radio", label: "Radio" },
-  { id: "timer", icon: "timer", label: "Timer" },
-  { id: "clipboard", icon: "clipboard", label: "Clipboard" },
-  { id: "notes", icon: "note", label: "Quick note" },
-  { id: "notifications", icon: "bell", label: "Notifications" },
-  { id: "shelf", icon: "shelf", label: "Screenshots" },
-  { id: "dev", icon: "code", label: "Developer" },
-  { id: "keys", icon: "info", label: "About" },
-];
-
 function DockButton({ item, index, active, busy, badge, onClick }: {
   item: (typeof DOCK)[number]; index: number; active: boolean; busy: boolean; badge: number; onClick: () => void;
 }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  // In a dock that scrolls, the open tab slides into view.
+  useEffect(() => {
+    if (active) ref.current?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
+  }, [active]);
   return (
-    <motion.button onClick={onClick} aria-label={item.label} {...useTip(item.label)}
-      className={`relative grid size-9 place-items-center rounded-[14px] transition-colors ${active ? "text-white" : "text-white/50 hover:text-white/85"}`}
+    <motion.button ref={ref} onClick={onClick} aria-label={item.label} {...useTip(item.label)}
+      className={`relative grid size-9 shrink-0 place-items-center rounded-[14px] transition-colors ${active ? "text-white" : "text-white/50 hover:text-white/85"}`}
       style={busy && !active ? { color: COLOR.tool } : undefined}
       initial={{ opacity: 0, y: -6, scale: 0.8 }} animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ type: "spring", stiffness: 500, damping: 30, delay: 0.03 + index * 0.03 }}
@@ -165,16 +158,20 @@ function DockButton({ item, index, active, busy, badge, onClick }: {
   );
 }
 
-/** The floating bar under the open notch that switches what it shows. */
-function Dock({ tab, onChange, timerRunning, unread, waiting, devOn }: {
-  tab: HoverTab; onChange: (t: HoverTab) => void; timerRunning: boolean; unread: number; waiting: number; devOn: boolean;
+/** The floating bar under the open notch that switches what it shows. As wide as the open island at
+    most (11 buttons); more tabs scroll sideways, mouse wheel too. */
+function Dock({ tab, onChange, timerRunning, unread, waiting, tabs }: {
+  tab: HoverTab; onChange: (t: HoverTab) => void; timerRunning: boolean; unread: number; waiting: number; tabs: DockTabs;
 }) {
   return (
-    <div className="flex items-center gap-1 rounded-[20px] bg-black p-1.5" style={{ boxShadow: "inset 0 0 0 1px rgb(255 255 255 / 0.08)" }}>
-      {DOCK.filter((item) => devOn || item.id !== "dev").map((item, i) => (
+    <div className="rounded-[20px] bg-black p-1" style={{ maxWidth: DOCK_MAX_WIDTH, boxShadow: "inset 0 0 0 1px rgb(255 255 255 / 0.08)" }}>
+      {/* p-0.5 inside the scroll area keeps the unread badges, which sit just outside their button, from being clipped. */}
+      <ScrollRow className="flex items-center gap-1 p-0.5">
+      {DOCK.filter((item) => tabs.shown(item.id)).map((item, i) => (
         <DockButton key={item.id} item={item} index={i} active={tab === item.id} busy={item.id === "timer" && timerRunning}
           badge={item.id === "notifications" ? unread : item.id === "dev" ? waiting : 0} onClick={() => onChange(item.id)} />
       ))}
+      </ScrollRow>
     </div>
   );
 }
@@ -204,14 +201,17 @@ function FileHeader({ path, info, onClose }: { path: string; info: FileInfo; onC
 }
 
 /** A row that scrolls sideways (mouse wheel too) when its items don't fit, fading out the cut-off edge. */
-function ScrollRow({ children }: { children: React.ReactNode }) {
+function ScrollRow({ children, className = "flex gap-2 px-1 py-1" }: { children: React.ReactNode; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [fade, setFade] = useState({ left: false, right: false });
   const update = () => {
     const el = ref.current;
-    if (el) setFade({ left: el.scrollLeft > 1, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 1 });
+    if (!el) return;
+    const left = el.scrollLeft > 1, right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+    setFade((f) => (f.left === left && f.right === right ? f : { left, right }));
   };
-  useEffect(update, []);
+  // Every render: the items can change (tabs switched on or off in the dock).
+  useEffect(update);
   // Fade to a faint ghost (not fully transparent) so a cut-off box shows there's more to scroll.
   const ghost = "rgb(0 0 0 / 0.25)";
   const mask = `linear-gradient(to right, ${fade.left ? `${ghost}, #000 56px` : "#000"}, ${fade.right ? `#000 calc(100% - 56px), ${ghost}` : "#000"})`;
@@ -221,7 +221,7 @@ function ScrollRow({ children }: { children: React.ReactNode }) {
       onScroll={update}
       onWheel={(e) => ref.current && (ref.current.scrollLeft += e.deltaY + e.deltaX)}
       // Padding gives the hover lift room inside the scroll area, which clips its overflow.
-      className="no-scrollbar flex gap-2 overflow-x-auto px-1 py-1"
+      className={`no-scrollbar overflow-x-auto ${className}`}
       style={{ maskImage: mask }}
     >
       {children}
@@ -308,19 +308,26 @@ export default function App() {
   const { battery, privacy, event, flash: rawFlash, show, notes, unread, removeNote, clearNotes, markRead } = useSystem();
   // Do Not Disturb hides notification pop-ups; they still collect in the Notifications tab.
   const { dnd, toggle: toggleDnd } = useDnd();
-  const flash = dnd && rawFlash?.kind === "notification" ? null : rawFlash;
   const weather = useWeather();
   useDownloads(useCallback((d: Download) => show({ kind: "download", ...d }), [show]));
   const clips = useClipboard();
   const devTab = useDevEnabled();
+  const dockTabs = useDockTabs(devTab);
+  const pins = usePins();
+  const skin = useSkin();
+  const [ctrl, setCtrl] = useState(false);
   const dev = useDev(show, devTab.on);
   const github = useGitHub(show, devTab.on);
   const shots = useShelf(useCallback((shot: Shot) => show({ kind: "screenshot", ...shot }), [show]));
+  const ring = useRef(() => {});
   const onTimerDone = useCallback((d: Ding) => {
     show({ kind: "timer", ...d });
     chime();
+    if (d.ring) ring.current();
   }, [show]);
-  const tools = useTools(onTimerDone);
+  const tools = useTools(onTimerDone, useCallback((app: string) => show({ kind: "focus", app }), [show]));
+  // A focus session silences notification pop-ups too.
+  const flash = (dnd || tools.tool?.mode === "focus") && rawFlash?.kind === "notification" ? null : rawFlash;
   const onTrackChange = useCallback(() => show({ kind: "track" }), [show]);
   const system = useMedia(onTrackChange);
   // Starting the island's own player pauses whatever else is playing, like any music app would.
@@ -334,12 +341,31 @@ export default function App() {
   const radio = useRadio();
   // The island's own player wins while it plays, or when nothing else is playing.
   const player = local.media && (local.media.playing || !system.media?.playing) ? local : system;
+  // A timer or alarm pauses whatever's playing so it can be heard, and plays it again once its
+  // pop-up has gone.
+  const pausedFor = useRef<"local" | "system" | null>(null);
+  ring.current = () => {
+    const which = local.media?.playing ? "local" : system.media?.playing ? "system" : null;
+    if (!which) return;
+    (which === "local" ? local : system).control("toggle");
+    pausedFor.current = which;
+  };
+  useEffect(() => {
+    const which = pausedFor.current;
+    if (flash?.kind === "timer" || !which) return;
+    pausedFor.current = null;
+    const p = which === "local" ? local : system;
+    if (!p.media?.playing) p.control("toggle");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flash?.kind]);
   const playing = player.media?.playing ? player.media : null;
   // Updates restart the island, so automatic ones wait until it's closed and its own player is quiet.
   const updater = useUpdater(() => !hovered && !local.media?.playing, useCallback((version: string) => show({ kind: "update", version }), [show]));
 
   // Hover opens on the player when there's music, otherwise on the timer.
-  const defaultTab: HoverTab = player.media ? "music" : "today";
+  // What opens on hover: Now playing during a song, else Today, else the first tab in the dock.
+  const defaultTab: HoverTab = player.media && dockTabs.shown("music") ? "music"
+    : dockTabs.shown("today") ? "today" : DOCK.find((t) => dockTabs.shown(t.id))!.id;
   const [tab, setTab] = useState<HoverTab>(defaultTab);
   // A shortcut can open the island without the cursor. It closes once the cursor has visited
   // and left, or after a few seconds if the cursor never comes.
@@ -397,7 +423,7 @@ export default function App() {
   // CPU/RAM only while you're looking at them or something heavy is running.
   // Turning the Developer tab off while it's open goes back to Today.
   useEffect(() => {
-    if (!devTab.on && tab === "dev") setTab("today");
+    if (!devTab.on && tab === "dev") setTab(defaultTab);
   }, [devTab.on, tab]);
   const meters = useMeters((hovered && tab === "dev") || dev.running.length > 0);
   const [contentRef, contentHeight] = useMeasured();
@@ -412,6 +438,7 @@ export default function App() {
       listen<boolean>("hidden", (e) => setHidden(e.payload)),
       listen<number>("progress", (e) => setStage((s) => (s.kind === "converting" ? { ...s, progress: e.payload } : s))),
       listen<boolean>("shift", (e) => setShift(e.payload)),
+      listen<boolean>("ctrl", (e) => setCtrl(e.payload)),
       getCurrentWebview().onDragDropEvent(({ payload }) => {
         // A screenshot being dragged out of the shelf passes over the island first; that's not a drop for us.
         if (draggingOut.current) return;
@@ -439,6 +466,12 @@ export default function App() {
   onDrop.current = (paths, at) => {
     const path = paths[0];
     if (!path) return;
+    if (ctrl) {
+      pins.add(paths);
+      setTab("pins");
+      setForced(true);
+      return;
+    }
     const id = appAt(at.x / devicePixelRatio, at.y / devicePixelRatio);
     if (shift) {
       const preset = id?.startsWith(CONVERT) && dragInfo?.presets.find((p) => CONVERT + p.id === id);
@@ -471,8 +504,8 @@ export default function App() {
   const showHeld = !!held && stage.kind === "idle" && !dragging;
   const pinned = stagePinned || forced;
   const resting = (stage.kind === "idle" || converting) && !hovered && !dragging;
-  const openWith = dragging && !shift;
-  const view = resting ? (flash ? "flash" : "collapsed") : openWith ? "openwith" : dragging ? "convert" : showHeld ? "held" : stage.kind === "idle" ? "hint" : stage.kind;
+  const openWith = dragging && !shift && !ctrl;
+  const view = resting ? (flash ? "flash" : "collapsed") : openWith ? "openwith" : dragging && ctrl ? "pin" : dragging ? "convert" : showHeld ? "held" : stage.kind === "idle" ? "hint" : stage.kind;
   const size =
     view === "collapsed"
       ? { width: restWidth || 76, height: COLLAPSED.height }
@@ -504,6 +537,7 @@ export default function App() {
   const conversion = converting ? { progress: converting.progress, color: accent } : null;
 
   return (
+    <SkinContext.Provider value={skin.skin}>
     <TooltipLayer active={over}>
     <div className="flex flex-col items-center" style={{ gap: TRAY_GAP }}>
       {/* The notch hangs from the top edge of the screen: square top, rounded bottom, curved ears. */}
@@ -558,13 +592,14 @@ export default function App() {
             {view === "openwith" && (
               <OpenWithView paths={dragPaths} apps={openWithApps} point={dragAt} />
             )}
+            {view === "pin" && <PinDropView count={dragPaths.length} />}
             {view === "convert" && (
               <ConvertView paths={dragPaths} point={dragAt} accent={ACCENT[dragInfo?.kind ?? "none"]}
                 busy={!!converting} formats={dragInfo?.presets ?? (looksLikeFile(dragPaths[0]) ? null : [])} />
             )}
 
             {view === "flash" && flash && (
-              flash.kind === "track" ? <TrackFlash player={player} /> : flash.kind === "screenshot" ? <ShotFlash shot={flash} /> : flash.kind === "download" ? <DownloadFlash download={flash} /> : flash.kind === "update" ? <UpdateFlash version={flash.version} /> : flash.kind === "dev" ? <DevFlashView flash={flash.dev} /> : <FlashView flash={flash} />
+              flash.kind === "track" ? <TrackFlash player={player} /> : flash.kind === "screenshot" ? <ShotFlash shot={flash} /> : flash.kind === "download" ? <DownloadFlash download={flash} /> : flash.kind === "update" ? <UpdateFlash version={flash.version} /> : flash.kind === "focus" ? <FocusFlash app={flash.app} /> : flash.kind === "dev" ? <DevFlashView flash={flash.dev} /> : <FlashView flash={flash} />
             )}
 
             {view === "hint" && !dragging && (
@@ -588,13 +623,14 @@ export default function App() {
                     {tab === "library" && <LibraryView library={library} local={local} />}
                     {tab === "radio" && <RadioView radio={radio} local={local} />}
                     {tab === "timer" && <TimerView tools={tools} />}
-                    {tab === "today" && <TodayView weather={weather} dnd={dnd} onDnd={toggleDnd} devOn={devTab.on} onDev={devTab.toggle} />}
+                    {tab === "today" && <TodayView weather={weather} dnd={dnd} onDnd={toggleDnd} />}
                     {tab === "clipboard" && <ClipboardView clips={clips} />}
                     {tab === "notifications" && <NotificationsView notes={notes} onRemove={removeNote} onClear={clearNotes} />}
                     {tab === "shelf" && <ShelfView shots={shots} />}
+                    {tab === "pins" && <PinsView pins={pins} />}
                     {tab === "notes" && <NotesView open={noteToOpen} onOpened={() => setNoteToOpen(null)} />}
                     {tab === "dev" && <DevView dev={dev} github={github} meters={meters} />}
-                    {tab === "keys" && <AboutView updater={updater} />}
+                    {tab === "settings" && <SettingsView updater={updater} skin={skin} tabs={dockTabs} onOpenTab={setTab} />}
                   </motion.div>
                 </AnimatePresence>
               </div>
@@ -696,11 +732,12 @@ export default function App() {
             exit={{ opacity: 0, y: -8, scale: 0.96, filter: "blur(4px)", transition: { duration: 0.14 } }}
             transition={{ type: "spring", stiffness: 420, damping: 30 }}
           >
-            <Dock tab={tab} onChange={setTab} timerRunning={!!tools.tool} unread={unread} waiting={dev.waiting.length} devOn={devTab.on} />
+            <Dock tab={tab} onChange={setTab} timerRunning={!!tools.tool} unread={unread} waiting={dev.waiting.length} tabs={dockTabs} />
           </motion.div>
         )}
       </AnimatePresence>
     </div>
     </TooltipLayer>
+    </SkinContext.Provider>
   );
 }

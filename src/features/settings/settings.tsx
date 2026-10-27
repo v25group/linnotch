@@ -1,4 +1,5 @@
-// The About tab: what linnotch is, updates (src-tauri/src/update.rs), and the keyboard shortcuts.
+// The Settings tab: About (what linnotch is, its look, updates from src-tauri/src/update.rs), the
+// keyboard shortcuts, and which tabs the dock shows.
 // Updates install on their own by default, but only while the island is idle; the new version
 // says "Update completed" when it starts.
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -6,10 +7,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { motion } from "motion/react";
 import { Icon, type IconName } from "../../components/icons";
+import { useTip } from "../../components/tooltip";
 import { load, save } from "../../lib/storage";
-import { ShortcutsView } from "../shortcuts/shortcuts";
+import { ShortcutsView } from "./shortcuts";
+import { Switch, TabsPanel, type DockTabs, type HoverTab } from "./tabs";
 import logo from "../../assets/linnotch.png";
-import { Kit } from "../../island/kit";
+import { Fox, Kit, KitEyes, type Skin, type useSkin } from "../../island/kit";
 
 type Update = { version: string; notes: string; size: number };
 type Status =
@@ -149,7 +152,52 @@ function UpdateCard({ updater }: { updater: Updater }) {
   );
 }
 
-function AboutPane({ updater }: { updater: Updater }) {
+const SKINS: { id: Skin; label: string; hint: string }[] = [
+  { id: "kit", label: "Kit", hint: "The fox, linnotch's own" },
+  { id: "eyes", label: "Eyes", hint: "Just Kit's eyes, following your mouse" },
+];
+
+/** Start with Windows: the same setting as the tray menu's check (src-tauri/src/lib.rs keeps them in step). */
+function StartupRow() {
+  const [on, setOn] = useState<boolean | null>(null);
+  useEffect(() => void invoke<boolean>("startup_get").then(setOn).catch(() => {}), []);
+  const flip = () => invoke<boolean>("startup_set", { on: !on }).then(setOn).catch(() => {});
+  return (
+    <div className="flex items-center gap-2.5 rounded-2xl bg-white/5 px-3.5 py-2">
+      <div className="min-w-0 flex-1">
+        <div className="text-[12.5px] font-medium">Start with Windows</div>
+        <div className="truncate text-[11px] text-white/40">Open linnotch by itself when you sign in</div>
+      </div>
+      <Switch on={!!on} disabled={on === null} onClick={flip} label="Start with Windows" />
+    </div>
+  );
+}
+
+/** Who lives in the resting notch. Each choice is a live preview. */
+function LookOption({ skin, option }: { skin: ReturnType<typeof useSkin>; option: (typeof SKINS)[number] }) {
+  const on = skin.skin === option.id;
+  return (
+    <button onClick={() => skin.choose(option.id)} aria-pressed={on} {...useTip(option.hint)}
+      className={`flex items-center gap-2 rounded-xl py-1 pr-3 pl-1 transition-colors ${on ? "bg-white/12 ring-1 ring-white/30" : "bg-white/4 hover:bg-white/8"}`}>
+      <span className="grid h-7 w-11 shrink-0 place-items-center rounded-lg bg-black">
+        {option.id === "kit" ? <Fox mood="idle" size={20} /> : <KitEyes mood="idle" />}
+      </span>
+      <span className="text-[12px] font-medium">{option.label}</span>
+    </button>
+  );
+}
+
+/** Who lives in the resting notch, in one row. Each choice is a live preview. */
+function LookCard({ skin }: { skin: ReturnType<typeof useSkin> }) {
+  return (
+    <div className="flex items-center gap-2 rounded-2xl bg-white/5 py-1.5 pr-1.5 pl-3.5">
+      <div className="min-w-0 flex-1 text-[12.5px] font-medium">Look</div>
+      {SKINS.map((s) => <LookOption key={s.id} skin={skin} option={s} />)}
+    </div>
+  );
+}
+
+function AboutPane({ updater, skin }: { updater: Updater; skin: ReturnType<typeof useSkin> }) {
   return (
     <div className="flex flex-col gap-2.5">
       <div className="flex items-center gap-3 px-1">
@@ -160,6 +208,8 @@ function AboutPane({ updater }: { updater: Updater }) {
         </div>
       </div>
       <UpdateCard updater={updater} />
+      <StartupRow />
+      <LookCard skin={skin} />
       {/* Who makes it, where to report things, and the credit Open-Meteo asks for. */}
       <div className="flex items-center gap-1.5 px-1 text-[10.5px] text-white/35">
         <span>by</span>
@@ -175,10 +225,12 @@ function AboutPane({ updater }: { updater: Updater }) {
   );
 }
 
-type Pane = "about" | "shortcuts";
-const PANES: { id: Pane; label: string }[] = [{ id: "about", label: "About" }, { id: "shortcuts", label: "Shortcuts" }];
+type Pane = "about" | "shortcuts" | "tabs";
+const PANES: { id: Pane; label: string }[] = [{ id: "about", label: "About" }, { id: "shortcuts", label: "Shortcuts" }, { id: "tabs", label: "Tabs" }];
 
-export function AboutView({ updater }: { updater: Updater }) {
+export function SettingsView({ updater, skin, tabs, onOpenTab }: {
+  updater: Updater; skin: ReturnType<typeof useSkin>; tabs: DockTabs; onOpenTab: (id: HoverTab) => void;
+}) {
   const [pane, setPane] = useState<Pane>("about");
   const ready = updater.status.kind === "available";
   return (
@@ -194,7 +246,7 @@ export function AboutView({ updater }: { updater: Updater }) {
           </button>
         ))}
       </div>
-      {pane === "about" ? <AboutPane updater={updater} /> : <ShortcutsView />}
+      {pane === "about" ? <AboutPane updater={updater} skin={skin} /> : pane === "shortcuts" ? <ShortcutsView /> : <TabsPanel tabs={tabs} onOpen={onOpenTab} />}
     </div>
   );
 }
